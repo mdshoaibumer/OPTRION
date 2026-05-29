@@ -1,0 +1,40 @@
+# OPTRION — Git Ignore
+# ================================================================
+
+# Binaries
+/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test artifacts
+coverage.out
+*.test
+*.prof
+
+# Build cache
+/tmp/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment files (never commit real secrets)
+.env
+.env.local
+.env.production
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# Docker volumes (if using bind mounts)
+/data/
+
+# Go workspace (if using multi-module)
+go.work
+go.work.sum

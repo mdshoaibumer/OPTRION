@@ -1,0 +1,59 @@
+# ================================================================
+# OPTRION — golangci-lint Configuration
+# ================================================================
+
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - bodyclose
+    - exhaustive
+    - gocritic
+    - gocyclo
+    - gofmt
+    - goimports
+    - misspell
+    - prealloc
+    - revive
+    - unconvert
+    - unparam
+
+linters-settings:
+  gocyclo:
+    min-complexity: 15
+  exhaustive:
+    default-signifies-exhaustive: true
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - style
+      - performance
+  revive:
+    rules:
+      - name: unexported-return
+        disabled: true
+      - name: unused-parameter
+        disabled: false
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - unparam
+        - gocritic
+  max-same-issues: 0
+  max-issues-per-linter: 0
+
+output:
+  formats:
+    - format: colored-line-number
+  sort-results: true

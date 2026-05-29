@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"embed"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -11,6 +12,9 @@ import (
 	"github.com/optrion/optrion/internal/platform/database"
 	"github.com/optrion/optrion/internal/platform/logger"
 	"github.com/optrion/optrion/internal/platform/server"
+	"github.com/optrion/optrion/internal/tenant/adapter/postgres"
+	"github.com/optrion/optrion/internal/tenant/adapter/rest"
+	"github.com/optrion/optrion/internal/tenant/app"
 )
 
 // Container holds all application dependencies wired together.
@@ -23,10 +27,16 @@ type Container struct {
 	Redis    *cache.Redis
 	Server   *server.Server
 
+	// Services
+	TenantService *app.TenantService
+
 	// Internal components for lifecycle management
 	router *server.Router
 	health *server.HealthHandler
 }
+
+// Migrations is set by main.go to provide embedded migration files.
+var Migrations embed.FS
 
 // NewContainer builds the application container with the full dependency graph.
 // Order: Config → Logger → Database → Redis → Router → Server
@@ -62,14 +72,36 @@ func NewContainer(ctx context.Context) (*Container, error) {
 	}
 	c.Redis = redis
 
-	// 5. Health handler
+	// 5. Run migrations
+	migrator := database.NewMigrator(db.Pool(), c.Logger.With("component", "migrator"))
+	if err := migrator.MigrateFS(ctx, Migrations, "."); err != nil {
+		c.Database.Close()
+		_ = redis.Close()
+		return nil, fmt.Errorf("running migrations: %w", err)
+	}
+
+	// 6. Wire tenant bounded context
+	pool := db.Pool()
+	tenantRepo := postgres.NewTenantRepository(pool)
+	productRepo := postgres.NewProductRepository(pool)
+	environmentRepo := postgres.NewEnvironmentRepository(pool)
+	componentRepo := postgres.NewComponentRepository(pool)
+	auditRepo := postgres.NewAuditRepository(pool)
+	uow := postgres.NewUnitOfWork(pool)
+
+	c.TenantService = app.NewTenantService(
+		tenantRepo, productRepo, environmentRepo, componentRepo,
+		auditRepo, uow, c.Logger.With("component", "tenant"),
+	)
+
+	// 7. Health handler
 	c.health = server.NewHealthHandler(db, redis, cfg.App.Version, c.Logger.With("component", "health"))
 
-	// 6. Router
+	// 8. Router
 	c.router = server.NewRouter(c.Logger.With("component", "http"))
 	c.registerRoutes()
 
-	// 7. HTTP Server
+	// 9. HTTP Server
 	addr := fmt.Sprintf("%s:%d", cfg.HTTP.Host, cfg.HTTP.Port)
 	c.Server = server.NewServer(
 		addr,
@@ -91,6 +123,10 @@ func (c *Container) registerRoutes() {
 
 	// API version info
 	c.router.HandleFunc("GET /api/v1/info", c.infoHandler())
+
+	// Tenant domain routes
+	tenantHandler := rest.NewHandler(c.TenantService, c.Logger.With("component", "tenant-api"))
+	tenantHandler.RegisterRoutes(c.router.Mux())
 }
 
 // infoHandler returns application information.

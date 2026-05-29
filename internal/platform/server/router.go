@@ -29,6 +29,11 @@ func (rt *Router) HandleFunc(pattern string, handler http.HandlerFunc) {
 	rt.mux.HandleFunc(pattern, handler)
 }
 
+// Mux returns the underlying ServeMux for external route registration.
+func (rt *Router) Mux() *http.ServeMux {
+	return rt.mux
+}
+
 // Handler returns the composed HTTP handler with middleware chain.
 func (rt *Router) Handler() http.Handler {
 	middleware := Chain(

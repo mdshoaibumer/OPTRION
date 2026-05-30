@@ -1,3 +1,198 @@
+# Recommendation Intelligence Architecture Review
+
+## 1. Updated Folder Structure
+
+- internal/recommendation/domain/recommendation
+- internal/recommendation/domain/recommendationreport
+- internal/recommendation/domain/recommendationcategory
+- internal/recommendation/domain/recommendationpriority
+- internal/recommendation/domain/recommendationevidence
+- internal/recommendation/app/service
+- internal/recommendation/app/evidencebuilder
+- internal/recommendation/app/ranking
+- internal/recommendation/app/validation
+- internal/recommendation/adapter/repository
+- internal/recommendation/adapter/rest/v1
+- internal/recommendation/port/repository
+
+## 2. Migrations
+
+See migrations/000019_create_recommendation_tables.up.sql and .down.sql for recommendations, recommendation_reports, recommendation_evidence.
+
+## 3. Recommendation Architecture
+
+- Clean, hexagonal, DDD, multi-tenant, immutable, auditable
+- RecommendationAgent, EvidenceBuilder, RankingStrategy, Validator
+- Categories: Database, Redis, Infrastructure, Application, Network, Deployment, Capacity, Security
+
+## 4. Safety Architecture
+
+- RecommendationValidator prevents dangerous advice (e.g., DROP DATABASE, DELETE DATA, DISABLE SECURITY)
+- All recommendations require evidence
+
+## 5. Production Code
+
+- See internal/recommendation/domain, app, port, adapter for full implementation
+
+## 6. Tests
+
+- (To be implemented) Unit: ranking, evidence builder, confidence scoring, recommendation validation
+- Integration: workflow, Gemini mock, database
+
+## 7. Hallucination Controls
+
+- Only recommend actions supported by evidence
+- Validate all recommendations for safety and hallucination
+
+## 8. Operational Review
+
+### How should engineers consume recommendations?
+- As advisory input for investigation and remediation
+- Use evidence, confidence, and risk to guide action
+- Always review recommendations before acting
+
+### When should recommendations be ignored?
+- If evidence is weak or not relevant
+- If risk outweighs benefit
+- If recommendation is not applicable to environment
+
+### What recommendations should require manual review?
+- Any with high risk, high impact, or low confidence
+- Any that could affect data, security, or infrastructure
+# AI Root Cause Intelligence Architecture Review
+
+## 1. Updated Folder Structure
+
+- internal/ai/domain/aianalysis
+- internal/ai/domain/aicontext
+- internal/ai/domain/rootcausereport
+- internal/ai/domain/confidencescore
+- internal/ai/domain/investigationhint
+- internal/ai/app/service
+- internal/ai/app/contextbuilder
+- internal/ai/app/prompt
+- internal/ai/app/validation
+- internal/ai/adapter/provider
+- internal/ai/adapter/repository
+- internal/ai/adapter/rest/v1
+- internal/ai/port/repository
+
+## 2. Migrations
+
+See migrations/000018_create_ai_tables.up.sql and .down.sql for ai_analyses, ai_context_snapshots, ai_reports.
+
+## 3. AI Architecture
+
+- Clean, hexagonal, DDD, provider-abstracted
+- AIAnalysis, AIContext, RootCauseReport, ConfidenceScore, InvestigationHint
+- Immutable, auditable, multi-tenant
+
+## 4. Provider Abstraction
+
+- AIProvider interface supports Gemini, OpenAI, Anthropic, Ollama
+- Business logic never depends on provider
+
+## 5. Production Code
+
+- See internal/ai/domain, app, port, adapter for full implementation
+
+## 6. Tests
+
+- (To be implemented) Unit: context builder, output validation, prompt generation, provider abstraction
+- Integration: Gemini mock, analysis workflow, database
+
+## 7. Hallucination Safeguards
+
+- Only use platform facts (metrics, incidents, events, health, status)
+- Never invent metrics, incidents, or components
+- Validate all outputs for structure and content
+- Reject malformed or hallucinated outputs
+
+## 8. Operational Review
+
+### How should engineers use AI output?
+- As advisory input for investigation, not as fact
+- Use confidence score and affected components as guidance
+- Always review AI suggestions before acting
+
+### What are the dangers?
+- Hallucinated causes or components
+- Over-reliance on AI suggestions
+- Misinterpretation of confidence
+
+### What should never be automated?
+- Remediation, infrastructure changes, or automated fixes
+- Any action that modifies production systems
+# Alert Intelligence Platform Architecture Review
+
+## 1. Updated Folder Structure
+
+- internal/alert/domain/alertrule
+- internal/alert/domain/alert
+- internal/alert/domain/alertchannel
+- internal/alert/domain/alertdelivery
+- internal/alert/domain/escalationpolicy
+- internal/alert/domain/notificationtemplate
+- internal/alert/app/service
+- internal/alert/app/event
+- internal/alert/app/routing
+- internal/alert/app/delivery
+- internal/alert/adapter/telegram
+- internal/alert/adapter/repository
+- internal/alert/adapter/rest/v1
+- internal/alert/port/repository
+- internal/alert/port/service
+
+## 2. Migrations
+
+See migrations/000017_create_alert_tables.up.sql and .down.sql for alert_rules, alerts, alert_channels, alert_deliveries, escalation_policies, notification_templates.
+
+## 3. Alert Architecture
+
+- Event-driven, multi-tenant, DDD, hexagonal, clean architecture
+- Alert Engine consumes Incident events, applies deduplication, routing, escalation, and delivery
+- Routing supports severity mapping (Info, Warning, Minor, Major, Critical)
+- Telegram channel: retry, delivery tracking, rate limiting, error handling
+- Notification templates: Markdown, variables
+- Escalation engine: policy-driven, reminders, step escalation
+- Delivery tracking: pending, sent, delivered, failed, retrying, full history
+
+## 4. Production Code
+
+- See internal/alert/domain, app, port, adapter for full implementation
+- All code is production-grade, extensible, and auditable
+
+## 5. Tests
+
+- (To be implemented) Unit: routing, templates, escalation, deduplication, telegram
+- Integration: database, telegram mock, API tests
+
+## 6. API Contracts
+
+- See API_CONTRACTS.md for full OpenAPI-style contracts and DTOs
+
+## 7. Scaling Review
+
+### 100 alerts/day
+- Easily handled by single instance
+- Minimal DB and delivery load
+
+### 1,000 alerts/day
+- Horizontal scale DB and delivery workers
+- Use connection pooling, async delivery
+- Monitor queue and delivery latency
+
+### 10,000 alerts/day
+- Partition by tenant, shard delivery queues
+- Use distributed rate limiting, circuit breakers
+- Scale out delivery adapters (Telegram, etc.)
+- Monitor for bottlenecks in deduplication, escalation, and delivery
+
+### Recommendations
+- Use stateless workers, autoscale delivery and escalation
+- Use message queues for event ingestion and delivery
+- Monitor and alert on delivery failures, queue depth, and escalation lag
+- Regularly review and tune deduplication and escalation policies
 # OPTRION — Architecture Review
 
 **Reviewer:** Principal Engineer Review  

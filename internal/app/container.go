@@ -6,15 +6,27 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"time"
 
+	healthpg "github.com/optrion/optrion/internal/health/adapter/postgres"
+	healthrest "github.com/optrion/optrion/internal/health/adapter/rest"
+	"github.com/optrion/optrion/internal/health/anomaly"
+	healthapp "github.com/optrion/optrion/internal/health/app"
+	"github.com/optrion/optrion/internal/health/collector"
+	"github.com/optrion/optrion/internal/health/port"
+	"github.com/optrion/optrion/internal/health/scheduler"
+	"github.com/optrion/optrion/internal/health/scoring"
+	incidentpg "github.com/optrion/optrion/internal/incident/adapter/postgres"
+	incidentrest "github.com/optrion/optrion/internal/incident/adapter/rest"
+	incidentapp "github.com/optrion/optrion/internal/incident/app"
 	"github.com/optrion/optrion/internal/platform/cache"
 	"github.com/optrion/optrion/internal/platform/config"
 	"github.com/optrion/optrion/internal/platform/database"
 	"github.com/optrion/optrion/internal/platform/logger"
 	"github.com/optrion/optrion/internal/platform/server"
-	"github.com/optrion/optrion/internal/tenant/adapter/postgres"
-	"github.com/optrion/optrion/internal/tenant/adapter/rest"
-	"github.com/optrion/optrion/internal/tenant/app"
+	tenantpg "github.com/optrion/optrion/internal/tenant/adapter/postgres"
+	tenantrest "github.com/optrion/optrion/internal/tenant/adapter/rest"
+	tenantapp "github.com/optrion/optrion/internal/tenant/app"
 )
 
 // Container holds all application dependencies wired together.
@@ -28,7 +40,12 @@ type Container struct {
 	Server   *server.Server
 
 	// Services
-	TenantService *app.TenantService
+	TenantService   *tenantapp.TenantService
+	HealthService   *healthapp.HealthService
+	IncidentService *incidentapp.IncidentService
+
+	// Scheduler
+	Scheduler *scheduler.Scheduler
 
 	// Internal components for lifecycle management
 	router *server.Router
@@ -82,26 +99,64 @@ func NewContainer(ctx context.Context) (*Container, error) {
 
 	// 6. Wire tenant bounded context
 	pool := db.Pool()
-	tenantRepo := postgres.NewTenantRepository(pool)
-	productRepo := postgres.NewProductRepository(pool)
-	environmentRepo := postgres.NewEnvironmentRepository(pool)
-	componentRepo := postgres.NewComponentRepository(pool)
-	auditRepo := postgres.NewAuditRepository(pool)
-	uow := postgres.NewUnitOfWork(pool)
+	tenantRepo := tenantpg.NewTenantRepository(pool)
+	productRepo := tenantpg.NewProductRepository(pool)
+	environmentRepo := tenantpg.NewEnvironmentRepository(pool)
+	componentRepo := tenantpg.NewComponentRepository(pool)
+	auditRepo := tenantpg.NewAuditRepository(pool)
+	uow := tenantpg.NewUnitOfWork(pool)
 
-	c.TenantService = app.NewTenantService(
+	c.TenantService = tenantapp.NewTenantService(
 		tenantRepo, productRepo, environmentRepo, componentRepo,
 		auditRepo, uow, c.Logger.With("component", "tenant"),
 	)
 
-	// 7. Health handler
+	// 7. Wire health monitoring bounded context
+	metricRepo := healthpg.NewHealthMetricRepository(pool)
+	snapshotRepo := healthpg.NewSnapshotRepository(pool)
+	scoreRepo := healthpg.NewScoreRepository(pool)
+	componentHealthRepo := healthpg.NewComponentHealthRepository(pool)
+	anomalyRepo := healthpg.NewAnomalyRepository(pool)
+	scoringEngine := scoring.NewEngine()
+	detector := anomaly.NewDetector(3.0, 60, 10)
+
+	c.HealthService = healthapp.NewHealthService(
+		metricRepo, snapshotRepo, scoreRepo, componentHealthRepo,
+		anomalyRepo, scoringEngine, detector, c.Logger.With("component", "health-monitor"),
+	)
+
+	// 8. Scheduler (collectors registered via seed/bootstrap)
+	c.Scheduler = scheduler.NewScheduler(
+		func(sctx context.Context, result *port.CollectorResult) {
+			c.HealthService.ProcessCollectorResult(sctx, result)
+		},
+		c.Logger.With("component", "scheduler"),
+	)
+
+	// Register internal collectors for OPTRION's own infrastructure
+	serverCollector := collector.NewServerCollector("system", "optrion-server")
+	c.Scheduler.Register(serverCollector, 60*time.Second)
+
+	// 9. Wire incident intelligence bounded context
+	incidentRepo := incidentpg.NewIncidentRepository(pool)
+	eventRepo := incidentpg.NewEventRepository(pool)
+	ruleRepo := incidentpg.NewRuleRepository(pool)
+	commentRepo := incidentpg.NewCommentRepository(pool)
+	timelineRepo := incidentpg.NewTimelineRepository(pool)
+
+	c.IncidentService = incidentapp.NewIncidentService(
+		incidentRepo, eventRepo, ruleRepo, commentRepo, timelineRepo,
+		c.Logger.With("component", "incident"),
+	)
+
+	// 10. Health handler
 	c.health = server.NewHealthHandler(db, redis, cfg.App.Version, c.Logger.With("component", "health"))
 
-	// 8. Router
+	// 11. Router
 	c.router = server.NewRouter(c.Logger.With("component", "http"))
 	c.registerRoutes()
 
-	// 9. HTTP Server
+	// 12. HTTP Server
 	addr := fmt.Sprintf("%s:%d", cfg.HTTP.Host, cfg.HTTP.Port)
 	c.Server = server.NewServer(
 		addr,
@@ -125,8 +180,16 @@ func (c *Container) registerRoutes() {
 	c.router.HandleFunc("GET /api/v1/info", c.infoHandler())
 
 	// Tenant domain routes
-	tenantHandler := rest.NewHandler(c.TenantService, c.Logger.With("component", "tenant-api"))
+	tenantHandler := tenantrest.NewHandler(c.TenantService, c.Logger.With("component", "tenant-api"))
 	tenantHandler.RegisterRoutes(c.router.Mux())
+
+	// Health monitoring routes
+	healthHandler := healthrest.NewHandler(c.HealthService, c.Logger.With("component", "health-api"))
+	healthHandler.RegisterRoutes(c.router.Mux())
+
+	// Incident intelligence routes
+	incidentHandler := incidentrest.NewHandler(c.IncidentService, c.Logger.With("component", "incident-api"))
+	incidentHandler.RegisterRoutes(c.router.Mux())
 }
 
 // infoHandler returns application information.
@@ -152,7 +215,12 @@ func (c *Container) infoHandler() http.HandlerFunc {
 func (c *Container) Shutdown(ctx context.Context) {
 	c.Logger.Info("shutting down application")
 
-	// Shutdown HTTP server first (stop accepting new requests)
+	// Stop scheduler first
+	if c.Scheduler != nil {
+		c.Scheduler.Stop()
+	}
+
+	// Shutdown HTTP server (stop accepting new requests)
 	if c.Server != nil {
 		if err := c.Server.Shutdown(ctx); err != nil {
 			c.Logger.Error("http server shutdown error", "error", err)

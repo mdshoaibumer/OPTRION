@@ -1,3 +1,237 @@
+# Recommendation Intelligence API Contracts
+
+## Recommendation APIs
+
+### GET /api/v1/incidents/{id}/recommendations
+- Get recommendations for an incident
+- Response: RecommendationReportDTO
+
+### POST /api/v1/incidents/{id}/recommend
+- Request recommendations for an incident
+- Response: RecommendationReportDTO
+
+### GET /api/v1/recommendations
+- List all recommendations for the tenant
+- Response: List of RecommendationDTO
+
+---
+
+## DTOs
+
+### RecommendationDTO
+- id: string (UUID)
+- tenant_id: string (UUID)
+- incident_id: string (UUID)
+- report_id: string (UUID)
+- category: string
+- priority: string
+- title: string
+- description: string
+- confidence: number
+- risk_level: string
+- evidence: RecommendationEvidenceDTO[]
+- created_at: string (RFC3339)
+
+### RecommendationReportDTO
+- id: string (UUID)
+- tenant_id: string (UUID)
+- incident_id: string (UUID)
+- recommendations: RecommendationDTO[]
+- created_at: string (RFC3339)
+
+### RecommendationEvidenceDTO
+- id: string (UUID)
+- tenant_id: string (UUID)
+- incident_id: string (UUID)
+- recommendation_id: string (UUID)
+- description: string
+- created_at: string (RFC3339)
+
+---
+
+## Dashboard DTOs
+
+### RecommendationFeedDTO
+- recommendations: RecommendationDTO[]
+
+### RecommendationHistoryDTO
+- incident_id: string (UUID)
+- reports: RecommendationReportDTO[]
+# AI Root Cause Intelligence API Contracts
+
+## Analysis APIs
+
+### GET /api/v1/incidents/{id}/analysis
+- Get root cause analysis for an incident
+- Response: RootCauseReportDTO
+
+### POST /api/v1/incidents/{id}/analyze
+- Request AI analysis for an incident
+- Response: AIAnalysisDTO
+
+### GET /api/v1/analysis
+- List all AI analyses for the tenant
+- Response: List of AIAnalysisDTO
+
+---
+
+## DTOs
+
+### AIAnalysisDTO
+- id: string (UUID)
+- tenant_id: string (UUID)
+- incident_id: string (UUID)
+- context_id: string (UUID)
+- report_id: string (UUID)
+- provider: string
+- requested_at: string (RFC3339)
+- completed_at: string (RFC3339)
+- status: string
+- created_at: string (RFC3339)
+
+### RootCauseReportDTO
+- id: string (UUID)
+- tenant_id: string (UUID)
+- incident_id: string (UUID)
+- likely_cause: string
+- affected_components: string[]
+- confidence: number
+- investigation_hints: string[]
+- created_at: string (RFC3339)
+
+### AIContextDTO
+- id: string (UUID)
+- tenant_id: string (UUID)
+- incident_id: string (UUID)
+- snapshot: object
+- created_at: string (RFC3339)
+
+---
+
+## Dashboard DTOs
+
+### RootCauseFeedDTO
+- analyses: RootCauseReportDTO[]
+
+### InvestigationGuidanceDTO
+- likely_cause: string
+- confidence: number
+- affected_components: string[]
+- investigation_hints: string[]
+
+### AnalysisHistoryDTO
+- incident_id: string (UUID)
+- analyses: AIAnalysisDTO[]
+# Alert Intelligence Platform API Contracts
+
+## Alert APIs
+
+### GET /api/v1/alerts
+- List all alerts for the tenant.
+- Query params: severity, status, incident_id, rule_id, channel_id, time range
+- Response: List of AlertDTO
+
+### GET /api/v1/alerts/{id}
+- Get alert by ID
+- Response: AlertDTO
+
+## Alert Rule APIs
+
+### GET /api/v1/alert-rules
+- List all alert rules for the tenant
+- Response: List of AlertRuleDTO
+
+### POST /api/v1/alert-rules
+- Create a new alert rule
+- Request: AlertRuleCreateDTO
+- Response: AlertRuleDTO
+
+### PATCH /api/v1/alert-rules/{id}
+- Update an alert rule
+- Request: AlertRuleUpdateDTO
+- Response: AlertRuleDTO
+
+## Escalation Policy APIs
+
+### GET /api/v1/escalation-policies
+- List all escalation policies for the tenant
+- Response: List of EscalationPolicyDTO
+
+### POST /api/v1/escalation-policies
+- Create a new escalation policy
+- Request: EscalationPolicyCreateDTO
+- Response: EscalationPolicyDTO
+
+---
+
+## DTOs
+
+### AlertDTO
+- id: string (UUID)
+- tenant_id: string (UUID)
+- rule_id: string (UUID)
+- incident_id: string (UUID)
+- severity: string
+- status: string
+- message: string
+- deliveries: AlertDeliveryDTO[]
+- created_at: string (RFC3339)
+- updated_at: string (RFC3339)
+
+### AlertRuleDTO
+- id: string (UUID)
+- tenant_id: string (UUID)
+- name: string
+- description: string
+- severity: string
+- enabled: boolean
+- conditions: object[]
+- channels: string[] (UUID)
+- escalation_policy_id: string (UUID)
+- created_at: string (RFC3339)
+- updated_at: string (RFC3339)
+
+### EscalationPolicyDTO
+- id: string (UUID)
+- tenant_id: string (UUID)
+- name: string
+- description: string
+- steps: object[]
+- created_at: string (RFC3339)
+- updated_at: string (RFC3339)
+
+### AlertDeliveryDTO
+- id: string (UUID)
+- channel_id: string (UUID)
+- status: string
+- attempts: number
+- last_error: string
+- history: object[]
+- created_at: string (RFC3339)
+- updated_at: string (RFC3339)
+
+---
+
+## Dashboard DTOs
+
+### AlertFeedDTO
+- alerts: AlertDTO[]
+
+### DeliveryStatusDTO
+- delivery_id: string (UUID)
+- status: string
+- attempts: number
+- last_error: string
+- history: object[]
+
+### EscalationStatusDTO
+- policy_id: string (UUID)
+- current_step: number
+- next_escalation_at: string (RFC3339)
+
+### NotificationHistoryDTO
+- alert_id: string (UUID)
+- deliveries: AlertDeliveryDTO[]
 # OPTRION — API & Contract Architecture
 
 **Author:** Principal API Architect  

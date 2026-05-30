@@ -38,6 +38,9 @@ func run() error {
 		errCh <- container.Server.Start()
 	}()
 
+	// Start health monitoring scheduler
+	container.Scheduler.Start(ctx)
+
 	// Wait for shutdown signal or server error
 	select {
 	case <-ctx.Done():

@@ -95,10 +95,10 @@ func (rl *InMemoryRateLimiter) cleanupLoop() {
 func RateLimit(limiter RateLimiter, logger *slog.Logger) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Use tenant ID if authenticated, otherwise use IP
+			// Use tenant ID if authenticated, otherwise use client IP
 			key := TenantIDFromContext(r.Context())
 			if key == "" {
-				key = r.RemoteAddr
+				key = ClientIP(r)
 			}
 
 			allowed, err := limiter.Allow(r.Context(), key)

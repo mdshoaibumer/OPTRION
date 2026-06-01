@@ -26,6 +26,7 @@ type Config struct {
 	Redis    RedisConfig
 	Log      LogConfig
 	Auth     AuthConfig
+	AI       AIConfig
 }
 
 // AppConfig holds general application settings.
@@ -50,6 +51,15 @@ type HTTPConfig struct {
 // AuthConfig holds API key authentication settings.
 type AuthConfig struct {
 	Enabled bool
+}
+
+// AIConfig holds AI provider settings for root cause analysis.
+type AIConfig struct {
+	Provider  string // gemini, openai, anthropic, ollama
+	APIKey    string
+	Model     string
+	MaxTokens int
+	Enabled   bool
 }
 
 // DatabaseConfig holds PostgreSQL connection settings.
@@ -146,6 +156,13 @@ func Load() (*Config, error) {
 		Auth: AuthConfig{
 			Enabled: envOrDefaultBool("AUTH_ENABLED", true),
 		},
+		AI: AIConfig{
+			Provider:  envOrDefault("AI_PROVIDER", "gemini"),
+			APIKey:    os.Getenv("AI_API_KEY"),
+			Model:     envOrDefault("AI_MODEL", "gemini-2.0-flash"),
+			MaxTokens: envOrDefaultInt("AI_MAX_TOKENS", 4096),
+			Enabled:   envOrDefaultBool("AI_ENABLED", false),
+		},
 	}
 
 	if err := cfg.validate(); err != nil {
@@ -218,6 +235,12 @@ func (c *Config) validate() error {
 		}
 		if c.Database.Password == "" {
 			errs = append(errs, "DB_PASSWORD is required in production")
+		}
+		for _, origin := range c.HTTP.CORSOrigins {
+			if origin == "*" {
+				errs = append(errs, "CORS_ALLOWED_ORIGINS must not contain '*' wildcard in production")
+				break
+			}
 		}
 	}
 

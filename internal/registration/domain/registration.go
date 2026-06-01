@@ -2,12 +2,22 @@ package domain
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/optrion/optrion/internal/shared/id"
 	tenantdomain "github.com/optrion/optrion/internal/tenant/domain"
 )
+
+const (
+	maxNameLength = 128
+	maxSlugLength = 64
+	maxDescLength = 512
+)
+
+// slugRegex enforces URL-safe slugs: lowercase letters, digits, hyphens only.
+var slugRegex = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*[a-z0-9]$`)
 
 // RegistrationToken is used to authenticate registration requests.
 type RegistrationToken string
@@ -42,8 +52,20 @@ func (tr TenantRegistration) Validate() error {
 	if strings.TrimSpace(tr.Name) == "" {
 		return fmt.Errorf("tenant name is required")
 	}
+	if len(tr.Name) > maxNameLength {
+		return fmt.Errorf("tenant name exceeds maximum length of %d characters", maxNameLength)
+	}
 	if strings.TrimSpace(tr.Slug) == "" {
 		return fmt.Errorf("tenant slug is required")
+	}
+	if len(tr.Slug) > maxSlugLength {
+		return fmt.Errorf("tenant slug exceeds maximum length of %d characters", maxSlugLength)
+	}
+	if len(tr.Slug) < 3 {
+		return fmt.Errorf("tenant slug must be at least 3 characters")
+	}
+	if !slugRegex.MatchString(tr.Slug) {
+		return fmt.Errorf("tenant slug must contain only lowercase letters, digits, and hyphens")
 	}
 	if strings.TrimSpace(tr.Plan) == "" {
 		return fmt.Errorf("tenant plan is required")
@@ -69,8 +91,23 @@ func (pr ProductRegistration) Validate() error {
 	if strings.TrimSpace(pr.Name) == "" {
 		return fmt.Errorf("product name is required")
 	}
+	if len(pr.Name) > maxNameLength {
+		return fmt.Errorf("product name exceeds maximum length of %d characters", maxNameLength)
+	}
 	if strings.TrimSpace(pr.Slug) == "" {
 		return fmt.Errorf("product slug is required")
+	}
+	if len(pr.Slug) > maxSlugLength {
+		return fmt.Errorf("product slug exceeds maximum length of %d characters", maxSlugLength)
+	}
+	if len(pr.Slug) < 3 {
+		return fmt.Errorf("product slug must be at least 3 characters")
+	}
+	if !slugRegex.MatchString(pr.Slug) {
+		return fmt.Errorf("product slug must contain only lowercase letters, digits, and hyphens")
+	}
+	if len(pr.Description) > maxDescLength {
+		return fmt.Errorf("product description exceeds maximum length of %d characters", maxDescLength)
 	}
 	return nil
 }
@@ -85,6 +122,9 @@ type EnvironmentRegistration struct {
 func (er EnvironmentRegistration) Validate() error {
 	if strings.TrimSpace(er.Name) == "" {
 		return fmt.Errorf("environment name is required")
+	}
+	if len(er.Name) > maxNameLength {
+		return fmt.Errorf("environment name exceeds maximum length of %d characters", maxNameLength)
 	}
 	if strings.TrimSpace(er.Tier) == "" {
 		return fmt.Errorf("environment tier is required")
@@ -112,8 +152,14 @@ func (cr ComponentRegistration) Validate() error {
 	if strings.TrimSpace(cr.Name) == "" {
 		return fmt.Errorf("component name is required")
 	}
+	if len(cr.Name) > maxNameLength {
+		return fmt.Errorf("component name exceeds maximum length of %d characters", maxNameLength)
+	}
 	if strings.TrimSpace(cr.Kind) == "" {
 		return fmt.Errorf("component kind is required")
+	}
+	if len(cr.Description) > maxDescLength {
+		return fmt.Errorf("component description exceeds maximum length of %d characters", maxDescLength)
 	}
 
 	kind := tenantdomain.ComponentKind(cr.Kind)

@@ -8,6 +8,10 @@ import (
 	"net/http"
 	"time"
 
+	alertpg "github.com/optrion/optrion/internal/alert/adapter/repository"
+	"github.com/optrion/optrion/internal/alert/adapter/telegram"
+	alertevent "github.com/optrion/optrion/internal/alert/app/event"
+	alertservice "github.com/optrion/optrion/internal/alert/app/service"
 	healthpg "github.com/optrion/optrion/internal/health/adapter/postgres"
 	healthrest "github.com/optrion/optrion/internal/health/adapter/rest"
 	"github.com/optrion/optrion/internal/health/anomaly"
@@ -22,6 +26,7 @@ import (
 	"github.com/optrion/optrion/internal/platform/cache"
 	"github.com/optrion/optrion/internal/platform/config"
 	"github.com/optrion/optrion/internal/platform/database"
+	"github.com/optrion/optrion/internal/platform/eventbus"
 	"github.com/optrion/optrion/internal/platform/logger"
 	"github.com/optrion/optrion/internal/platform/server"
 	tenantpg "github.com/optrion/optrion/internal/tenant/adapter/postgres"
@@ -43,8 +48,10 @@ type Container struct {
 	TenantService   *tenantapp.TenantService
 	HealthService   *healthapp.HealthService
 	IncidentService *incidentapp.IncidentService
+	AlertEngine     alertservice.AlertEngine
 
-	// Scheduler
+	// Infrastructure
+	EventBus  *eventbus.Bus
 	Scheduler *scheduler.Scheduler
 
 	// Internal components for lifecycle management
@@ -56,7 +63,7 @@ type Container struct {
 var Migrations embed.FS
 
 // NewContainer builds the application container with the full dependency graph.
-// Order: Config → Logger → Database → Redis → Router → Server
+// Order: Config → Logger → Database → Redis → EventBus → Services → Router → Server
 func NewContainer(ctx context.Context) (*Container, error) {
 	c := &Container{}
 
@@ -97,7 +104,10 @@ func NewContainer(ctx context.Context) (*Container, error) {
 		return nil, fmt.Errorf("running migrations: %w", err)
 	}
 
-	// 6. Wire tenant bounded context
+	// 6. Event Bus
+	c.EventBus = eventbus.New(c.Logger.With("component", "eventbus"))
+
+	// 7. Wire tenant bounded context
 	pool := db.Pool()
 	tenantRepo := tenantpg.NewTenantRepository(pool)
 	productRepo := tenantpg.NewProductRepository(pool)
@@ -111,7 +121,7 @@ func NewContainer(ctx context.Context) (*Container, error) {
 		auditRepo, uow, c.Logger.With("component", "tenant"),
 	)
 
-	// 7. Wire health monitoring bounded context
+	// 8. Wire health monitoring bounded context
 	metricRepo := healthpg.NewHealthMetricRepository(pool)
 	snapshotRepo := healthpg.NewSnapshotRepository(pool)
 	scoreRepo := healthpg.NewScoreRepository(pool)
@@ -125,7 +135,7 @@ func NewContainer(ctx context.Context) (*Container, error) {
 		anomalyRepo, scoringEngine, detector, c.Logger.With("component", "health-monitor"),
 	)
 
-	// 8. Scheduler (collectors registered via seed/bootstrap)
+	// 9. Scheduler (collectors registered via seed/bootstrap)
 	c.Scheduler = scheduler.NewScheduler(
 		func(sctx context.Context, result *port.CollectorResult) {
 			c.HealthService.ProcessCollectorResult(sctx, result)
@@ -137,7 +147,7 @@ func NewContainer(ctx context.Context) (*Container, error) {
 	serverCollector := collector.NewServerCollector("system", "optrion-server")
 	c.Scheduler.Register(serverCollector, 60*time.Second)
 
-	// 9. Wire incident intelligence bounded context
+	// 10. Wire incident intelligence bounded context
 	incidentRepo := incidentpg.NewIncidentRepository(pool)
 	eventRepo := incidentpg.NewEventRepository(pool)
 	ruleRepo := incidentpg.NewRuleRepository(pool)
@@ -149,14 +159,45 @@ func NewContainer(ctx context.Context) (*Container, error) {
 		c.Logger.With("component", "incident"),
 	)
 
-	// 10. Health handler
+	// 11. Wire alert engine
+	telegramSender := telegram.NewTelegramSender(30, 2*time.Second)
+	dedup := alertservice.NewDeduplicationService(5 * time.Minute)
+	alertRuleRepo := alertpg.NewAlertRulePostgresRepository(pool)
+	alertRepo := alertpg.NewAlertPostgresRepository(pool)
+	alertChannelRepo := alertpg.NewAlertChannelPostgresRepository(pool)
+	alertDeliveryRepo := alertpg.NewAlertDeliveryPostgresRepository(pool)
+	c.AlertEngine = alertservice.NewAlertEngine(
+		alertRuleRepo, alertRepo, alertChannelRepo, alertDeliveryRepo,
+		dedup, telegramSender,
+		c.Logger.With("component", "alert-engine"),
+	)
+
+	// 12. Subscribe event bus handlers (cross-context communication)
+	c.EventBus.Subscribe("incident.opened", func(ctx context.Context, evt eventbus.Event) error {
+		incEvt, ok := evt.(eventbus.IncidentOpenedEvent)
+		if !ok {
+			return nil
+		}
+		return c.AlertEngine.ProcessEvent(ctx, alertEventFromIncidentOpened(incEvt))
+	})
+
+	// 13. API Key authentication
+	apiKeyRepo := tenantpg.NewAPIKeyRepository(pool)
+
+	// 14. Health handler
 	c.health = server.NewHealthHandler(db, redis, cfg.App.Version, c.Logger.With("component", "health"))
 
-	// 11. Router
-	c.Router = server.NewRouter(c.Logger.With("component", "http"))
+	// 15. Router (with auth, rate limiting, CORS config)
+	routerCfg := server.RouterConfig{
+		CORSOrigins:   cfg.HTTP.CORSOrigins,
+		RateLimitRPS:  cfg.HTTP.RateLimitRPS,
+		AuthEnabled:   cfg.Auth.Enabled,
+		AuthValidator: apiKeyRepo,
+	}
+	c.Router = server.NewRouter(c.Logger.With("component", "http"), routerCfg)
 	c.registerRoutes()
 
-	// 12. HTTP Server
+	// 16. HTTP Server
 	addr := fmt.Sprintf("%s:%d", cfg.HTTP.Host, cfg.HTTP.Port)
 	c.Server = server.NewServer(
 		addr,
@@ -240,4 +281,19 @@ func (c *Container) Shutdown(ctx context.Context) {
 	}
 
 	c.Logger.Info("application shutdown complete")
+}
+
+// alertEventFromIncidentOpened converts an event bus event to an alert engine event.
+func alertEventFromIncidentOpened(evt eventbus.IncidentOpenedEvent) alertevent.IncidentEvent {
+	return alertevent.IncidentEvent{
+		ID:         evt.IncidentID,
+		TenantID:   evt.Tenant,
+		IncidentID: evt.IncidentID,
+		Type:       alertevent.IncidentOpened,
+		Payload: map[string]interface{}{
+			"component_id": evt.ComponentID,
+			"title":        evt.Title,
+			"severity":     evt.Severity,
+		},
+	}
 }

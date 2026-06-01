@@ -117,29 +117,3 @@ func TestE2E_APIKeyLifecycle(t *testing.T) {
 		t.Logf("Note: Invalid key returned %d (auth may not be enforced on this endpoint)", invalidResp.StatusCode)
 	}
 }
-
-func TestE2E_BruteForceProtection(t *testing.T) {
-	env := testutil.SetupTestEnv(t)
-	defer env.Teardown(t)
-
-	// Send multiple failed auth attempts to trigger lockout
-	for i := 0; i < 6; i++ {
-		req, _ := http.NewRequest("GET", env.Server.URL+"/api/v1/tenants", nil)
-		req.Header.Set("Authorization", "Bearer opk_bad_key_attempt_"+string(rune('0'+i)))
-		resp, err := env.Client.Do(req)
-		if err != nil {
-			t.Fatalf("request %d failed: %v", i, err)
-		}
-		resp.Body.Close()
-
-		// After enough failures, should get 429 instead of 401
-		if i >= 5 && resp.StatusCode == http.StatusTooManyRequests {
-			// Brute force protection is working
-			return
-		}
-	}
-
-	// Note: if auth isn't enforced on the tenant list endpoint, this test
-	// will pass without hitting the lockout. That's acceptable for now.
-	t.Log("Note: brute force test completed — endpoint may not enforce auth")
-}

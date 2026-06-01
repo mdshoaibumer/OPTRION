@@ -1,0 +1,164 @@
+# Example optrion.yaml Configuration
+
+## This is a complete example of OPTRION configuration for a multi-component application
+## Copy this file to your project and customize for your infrastructure
+
+tenant:
+  # Tenant name - your organization
+  name: "GymFlow Fitness Platform"
+  # URL-safe slug for tenant identifier
+  slug: "gymflow"
+  # Subscription plan: free, starter, professional, enterprise
+  plan: "professional"
+
+product:
+  # Product name
+  name: "GymFlow Backend API"
+  # Product slug - unique within tenant
+  slug: "backend-api"
+  # Description of the product
+  description: "Main backend REST API for GymFlow fitness platform"
+  # Semantic version
+  version: "2.1.0"
+
+environment:
+  # Environment name
+  name: "Production"
+  # Environment tier: development, staging, production
+  tier: "production"
+
+# List of components to monitor
+# Supports: database, cache, api, web, queue, storage, service, external
+components:
+  # PostgreSQL Database
+  - name: "Primary Database"
+    kind: "database"
+    description: "Main PostgreSQL database for application data"
+    # Connection string or endpoint
+    endpoint: "postgresql://gymflow_user:secure_password@postgres.prod.internal:5432/gymflow_db"
+    port: 5432
+    settings:
+      max_connections: 100
+      pool_size: 50
+      timeout_seconds: 30
+
+  # Redis Cache
+  - name: "Session Cache"
+    kind: "cache"
+    description: "Redis cache for sessions and real-time data"
+    endpoint: "redis://redis.prod.internal:6379"
+    port: 6379
+    settings:
+      db_number: 0
+      password_env: "REDIS_PASSWORD"
+
+  # Main API Service
+  - name: "REST API Service"
+    kind: "api"
+    description: "Main REST API service exposing business logic"
+    endpoint: "http://api.gymflow.prod.internal"
+    port: 3000
+    settings:
+      health_check_path: "/health"
+      metrics_path: "/metrics"
+      timeout_seconds: 5
+      max_retries: 3
+
+  # Background Worker Service
+  - name: "Background Worker"
+    kind: "service"
+    description: "Async job processing and background tasks"
+    endpoint: "http://worker.gymflow.prod.internal"
+    port: 9000
+    settings:
+      health_check_path: "/health"
+      worker_threads: 10
+
+  # Message Queue
+  - name: "Message Queue"
+    kind: "queue"
+    description: "RabbitMQ message broker for inter-service communication"
+    endpoint: "rabbitmq.prod.internal"
+    port: 5672
+    settings:
+      virtual_host: "/"
+      username_env: "RABBITMQ_USER"
+      password_env: "RABBITMQ_PASSWORD"
+
+  # External Payment Service
+  - name: "Stripe Payment Provider"
+    kind: "external"
+    description: "External Stripe API for payment processing"
+    endpoint: "https://api.stripe.com"
+    port: 443
+    settings:
+      timeout_seconds: 10
+      api_version: "2023-10-16"
+
+# Monitoring configuration
+monitoring:
+  # Enable or disable monitoring for this application
+  enabled: true
+  
+  # Metrics collection interval in seconds
+  interval: 30
+  
+  # Default health check endpoint
+  health_check_path: "/health"
+  
+  # Enabled metrics collectors
+  metrics_collectors:
+    - "http"          # HTTP request metrics
+    - "postgres"      # Database metrics
+    - "redis"         # Cache metrics
+    - "system"        # System metrics (CPU, memory)
+    - "runtime"       # Go runtime metrics
+  
+  # Additional monitoring settings
+  settings:
+    # Enable detailed diagnostics
+    enable_deep_diagnostics: true
+    
+    # Maximum metric history to retain
+    max_metric_history: 10000
+    
+    # Enable automatic incident detection
+    enable_anomaly_detection: true
+    
+    # Enable alerting
+    enable_alerting: true
+    
+    # Alert on component health degradation
+    alert_on_degradation: true
+    
+    # Performance thresholds
+    performance_thresholds:
+      api_response_time_ms: 500
+      database_query_time_ms: 1000
+      cache_hit_rate_percent: 80
+
+# Advanced settings (optional)
+settings:
+  # Enable debug logging
+  debug_mode: false
+  
+  # Correlation ID tracking
+  enable_tracing: true
+  
+  # Automatic retry configuration
+  retry_policy:
+    max_retries: 3
+    backoff_multiplier: 2
+    initial_backoff_ms: 100
+  
+  # Timeout configuration
+  timeouts:
+    registration_ms: 10000
+    health_check_ms: 5000
+    metrics_submit_ms: 5000
+  
+  # TLS/SSL configuration
+  tls:
+    enabled: true
+    verify_certificates: true
+    ca_cert_path: "/etc/ssl/certs/ca-certificates.crt"

@@ -1,0 +1,41 @@
+{
+  "name": "@optrion/sdk",
+  "version": "1.0.0",
+  "description": "OPTRION JavaScript SDK for plug-and-play platform integration",
+  "main": "client.js",
+  "types": "client.d.ts",
+  "scripts": {
+    "test": "jest",
+    "lint": "eslint .",
+    "build": "tsc"
+  },
+  "keywords": [
+    "optrion",
+    "monitoring",
+    "observability",
+    "health",
+    "metrics"
+  ],
+  "author": "OPTRION",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0",
+    "typescript": "^5.0.0",
+    "eslint": "^8.0.0",
+    "@types/node": "^20.0.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/optrion/js-sdk"
+  },
+  "bugs": {
+    "url": "https://github.com/optrion/js-sdk/issues"
+  },
+  "homepage": "https://github.com/optrion/js-sdk"
+}

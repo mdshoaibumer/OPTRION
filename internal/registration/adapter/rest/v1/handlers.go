@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/optrion/optrion/internal/platform/server"
 	"github.com/optrion/optrion/internal/registration/app"
@@ -13,10 +14,10 @@ import (
 
 // RegisterRequest is the JSON request body for POST /api/v1/register.
 type RegisterRequest struct {
-	Tenant      TenantReg        `json:"tenant"`
-	Product     ProductReg       `json:"product"`
-	Environment EnvironmentReg   `json:"environment"`
-	Components  []ComponentReg   `json:"components"`
+	Tenant      TenantReg      `json:"tenant"`
+	Product     ProductReg     `json:"product"`
+	Environment EnvironmentReg `json:"environment"`
+	Components  []ComponentReg `json:"components"`
 }
 
 type TenantReg struct {
@@ -114,10 +115,15 @@ func (h *RegistrationHandler) Register(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// Determine appropriate HTTP status code
 		statusCode := http.StatusInternalServerError
+		msg := "internal server error"
 		if errors.Is(err, context.Canceled) {
 			statusCode = http.StatusRequestTimeout
+			msg = "request timeout"
+		} else if isValidationError(err) {
+			statusCode = http.StatusBadRequest
+			msg = err.Error()
 		}
-		server.WriteError(w, statusCode, err.Error())
+		server.WriteError(w, statusCode, msg)
 		return
 	}
 
@@ -133,4 +139,12 @@ func (h *RegistrationHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	server.WriteJSON(w, http.StatusCreated, resp)
+}
+
+// isValidationError checks if an error is a domain validation error (safe to expose to clients).
+func isValidationError(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, "invalid") ||
+		strings.Contains(msg, "required") ||
+		strings.Contains(msg, "registration")
 }

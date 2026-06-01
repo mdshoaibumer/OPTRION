@@ -150,14 +150,27 @@ func ContentType(ct string) Middleware {
 	}
 }
 
-// CORS adds permissive CORS headers for development.
-func CORS() Middleware {
+// CORS adds configurable CORS headers.
+// If allowedOrigins is empty, CORS is restricted to same-origin only.
+func CORS(allowedOrigins ...string) Middleware {
+	// Build set for O(1) lookup
+	originSet := make(map[string]bool, len(allowedOrigins))
+	for _, o := range allowedOrigins {
+		originSet[o] = true
+	}
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Request-ID, X-Correlation-ID")
-			w.Header().Set("Access-Control-Expose-Headers", "X-Request-ID, X-Correlation-ID")
+			origin := r.Header.Get("Origin")
+
+			// Only allow configured origins
+			if origin != "" && (originSet[origin] || originSet["*"]) {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Request-ID, X-Correlation-ID")
+				w.Header().Set("Access-Control-Expose-Headers", "X-Request-ID, X-Correlation-ID")
+				w.Header().Set("Vary", "Origin")
+			}
 
 			if r.Method == http.MethodOptions {
 				w.WriteHeader(http.StatusNoContent)
@@ -177,6 +190,9 @@ func SecurityHeaders() Middleware {
 			w.Header().Set("X-Frame-Options", "DENY")
 			w.Header().Set("X-XSS-Protection", "0")
 			w.Header().Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
+			w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
+			w.Header().Set("Referrer-Policy", "no-referrer")
+			w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
 
 			next.ServeHTTP(w, r)
 		})
@@ -200,14 +216,14 @@ func WriteError(w http.ResponseWriter, status int, message string) {
 	WriteJSON(w, status, map[string]string{"error": message})
 }
 
-// ReadJSON reads and decodes a JSON request body.
-func ReadJSON(r *http.Request, dst interface{}) error {
+// ReadJSON reads and decodes a JSON request body with a size limit.
+func ReadJSON(w http.ResponseWriter, r *http.Request, dst interface{}) error {
 	if r.Body == nil {
 		return fmt.Errorf("request body is empty")
 	}
 	defer r.Body.Close()
 
-	decoder := json.NewDecoder(http.MaxBytesReader(nil, r.Body, 1<<20)) // 1MB max
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)) // 1MB max
 	decoder.DisallowUnknownFields()
 
 	if err := decoder.Decode(dst); err != nil {

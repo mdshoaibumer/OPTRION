@@ -2,7 +2,7 @@ package repository
 
 import (
 	"context"
-	"internal/alert/domain/alert"
+	"github.com/optrion/optrion/internal/alert/domain/alert"
 
 	"github.com/google/uuid"
 )

@@ -2,7 +2,7 @@ package repository
 
 import (
 	"context"
-	"internal/alert/domain/escalationpolicy"
+	"github.com/optrion/optrion/internal/alert/domain/escalationpolicy"
 
 	"github.com/google/uuid"
 )

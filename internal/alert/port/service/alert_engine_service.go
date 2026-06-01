@@ -2,7 +2,7 @@ package service
 
 import (
 	"context"
-	"internal/alert/app/event"
+	"github.com/optrion/optrion/internal/alert/app/event"
 
 	"github.com/google/uuid"
 )

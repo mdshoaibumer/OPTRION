@@ -2,7 +2,7 @@ package repository
 
 import (
 	"context"
-	"internal/alert/domain/notificationtemplate"
+	"github.com/optrion/optrion/internal/alert/domain/notificationtemplate"
 
 	"github.com/google/uuid"
 )

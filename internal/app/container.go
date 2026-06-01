@@ -48,7 +48,7 @@ type Container struct {
 	Scheduler *scheduler.Scheduler
 
 	// Internal components for lifecycle management
-	router *server.Router
+	Router *server.Router
 	health *server.HealthHandler
 }
 
@@ -153,14 +153,14 @@ func NewContainer(ctx context.Context) (*Container, error) {
 	c.health = server.NewHealthHandler(db, redis, cfg.App.Version, c.Logger.With("component", "health"))
 
 	// 11. Router
-	c.router = server.NewRouter(c.Logger.With("component", "http"))
+	c.Router = server.NewRouter(c.Logger.With("component", "http"))
 	c.registerRoutes()
 
 	// 12. HTTP Server
 	addr := fmt.Sprintf("%s:%d", cfg.HTTP.Host, cfg.HTTP.Port)
 	c.Server = server.NewServer(
 		addr,
-		c.router.Handler(),
+		c.Router.Handler(),
 		c.Logger.With("component", "server"),
 		cfg.HTTP.ReadTimeout,
 		cfg.HTTP.WriteTimeout,
@@ -173,23 +173,23 @@ func NewContainer(ctx context.Context) (*Container, error) {
 // registerRoutes sets up all HTTP routes.
 func (c *Container) registerRoutes() {
 	// Health endpoints (no auth required)
-	c.router.HandleFunc("GET /healthz", c.health.Liveness())
-	c.router.HandleFunc("GET /readyz", c.health.Readiness())
+	c.Router.HandleFunc("GET /healthz", c.health.Liveness())
+	c.Router.HandleFunc("GET /readyz", c.health.Readiness())
 
 	// API version info
-	c.router.HandleFunc("GET /api/v1/info", c.infoHandler())
+	c.Router.HandleFunc("GET /api/v1/info", c.infoHandler())
 
 	// Tenant domain routes
 	tenantHandler := tenantrest.NewHandler(c.TenantService, c.Logger.With("component", "tenant-api"))
-	tenantHandler.RegisterRoutes(c.router.Mux())
+	tenantHandler.RegisterRoutes(c.Router.Mux())
 
 	// Health monitoring routes
 	healthHandler := healthrest.NewHandler(c.HealthService, c.Logger.With("component", "health-api"))
-	healthHandler.RegisterRoutes(c.router.Mux())
+	healthHandler.RegisterRoutes(c.Router.Mux())
 
 	// Incident intelligence routes
 	incidentHandler := incidentrest.NewHandler(c.IncidentService, c.Logger.With("component", "incident-api"))
-	incidentHandler.RegisterRoutes(c.router.Mux())
+	incidentHandler.RegisterRoutes(c.Router.Mux())
 }
 
 // infoHandler returns application information.

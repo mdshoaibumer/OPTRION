@@ -200,3 +200,44 @@ func TestRedisConfig_Addr(t *testing.T) {
 		t.Errorf("expected addr %q, got %q", expected, got)
 	}
 }
+
+func TestLoad_ProductionCORSWildcardRejected(t *testing.T) {
+	os.Clearenv()
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("DB_SSL_MODE", "require")
+	t.Setenv("DB_PASSWORD", "secret")
+	t.Setenv("REDIS_HOST", "localhost")
+	t.Setenv("DB_HOST", "localhost")
+	t.Setenv("DB_USER", "user")
+	t.Setenv("DB_NAME", "db")
+	t.Setenv("LOG_LEVEL", "info")
+	t.Setenv("LOG_FORMAT", "json")
+	t.Setenv("HTTP_PORT", "8080")
+	t.Setenv("CORS_ALLOWED_ORIGINS", "https://app.example.com,*")
+
+	_, err := Load()
+	if err == nil {
+		t.Error("expected validation error for CORS wildcard in production, got nil")
+	}
+}
+
+func TestLoad_AIConfigDefaults(t *testing.T) {
+	os.Clearenv()
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.AI.Provider != "gemini" {
+		t.Errorf("expected default AI provider 'gemini', got %q", cfg.AI.Provider)
+	}
+	if cfg.AI.Model != "gemini-2.0-flash" {
+		t.Errorf("expected default AI model 'gemini-2.0-flash', got %q", cfg.AI.Model)
+	}
+	if cfg.AI.MaxTokens != 4096 {
+		t.Errorf("expected default max tokens 4096, got %d", cfg.AI.MaxTokens)
+	}
+	if cfg.AI.Enabled {
+		t.Error("expected AI disabled by default")
+	}
+}

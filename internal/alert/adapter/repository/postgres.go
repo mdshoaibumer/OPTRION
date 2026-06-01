@@ -13,6 +13,7 @@ import (
 	"github.com/optrion/optrion/internal/alert/domain/alertchannel"
 	"github.com/optrion/optrion/internal/alert/domain/alertdelivery"
 	"github.com/optrion/optrion/internal/alert/domain/alertrule"
+	"github.com/optrion/optrion/internal/alert/domain/escalationpolicy"
 )
 
 // AlertRulePostgresRepository implements AlertRuleRepository with PostgreSQL.
@@ -367,4 +368,95 @@ func decodeConfig(data []byte) map[string]string {
 	result := make(map[string]string)
 	_ = json.Unmarshal(data, &result)
 	return result
+}
+
+// EscalationPolicyPostgresRepository implements EscalationPolicyRepository with PostgreSQL.
+type EscalationPolicyPostgresRepository struct {
+	pool *pgxpool.Pool
+}
+
+func NewEscalationPolicyPostgresRepository(pool *pgxpool.Pool) *EscalationPolicyPostgresRepository {
+	return &EscalationPolicyPostgresRepository{pool: pool}
+}
+
+func (r *EscalationPolicyPostgresRepository) Create(ctx context.Context, p *escalationpolicy.EscalationPolicy) error {
+	stepsJSON, err := json.Marshal(p.Steps)
+	if err != nil {
+		return fmt.Errorf("marshaling escalation steps: %w", err)
+	}
+	_, err = r.pool.Exec(ctx,
+		`INSERT INTO escalation_policies (id, tenant_id, name, description, steps, created_at, updated_at, created_by, updated_by)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		p.ID, p.TenantID, p.Name, p.Description, stepsJSON, p.CreatedAt, p.UpdatedAt, p.CreatedBy, p.UpdatedBy,
+	)
+	if err != nil {
+		return fmt.Errorf("inserting escalation policy: %w", err)
+	}
+	return nil
+}
+
+func (r *EscalationPolicyPostgresRepository) Update(ctx context.Context, p *escalationpolicy.EscalationPolicy) error {
+	stepsJSON, err := json.Marshal(p.Steps)
+	if err != nil {
+		return fmt.Errorf("marshaling escalation steps: %w", err)
+	}
+	result, err := r.pool.Exec(ctx,
+		`UPDATE escalation_policies SET name=$1, description=$2, steps=$3, updated_at=$4, updated_by=$5
+		 WHERE id=$6 AND tenant_id=$7`,
+		p.Name, p.Description, stepsJSON, time.Now().UTC(), p.UpdatedBy, p.ID, p.TenantID,
+	)
+	if err != nil {
+		return fmt.Errorf("updating escalation policy: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("escalation policy not found")
+	}
+	return nil
+}
+
+func (r *EscalationPolicyPostgresRepository) FindByID(ctx context.Context, id string) (*escalationpolicy.EscalationPolicy, error) {
+	row := r.pool.QueryRow(ctx,
+		`SELECT id, tenant_id, name, description, steps, created_at, updated_at, created_by, updated_by
+		 FROM escalation_policies WHERE id = $1`, id,
+	)
+
+	var p escalationpolicy.EscalationPolicy
+	var stepsJSON []byte
+	err := row.Scan(&p.ID, &p.TenantID, &p.Name, &p.Description, &stepsJSON, &p.CreatedAt, &p.UpdatedAt, &p.CreatedBy, &p.UpdatedBy)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("querying escalation policy: %w", err)
+	}
+	if err := json.Unmarshal(stepsJSON, &p.Steps); err != nil {
+		return nil, fmt.Errorf("unmarshaling escalation steps: %w", err)
+	}
+	return &p, nil
+}
+
+func (r *EscalationPolicyPostgresRepository) ListByTenant(ctx context.Context, tenantID string) ([]*escalationpolicy.EscalationPolicy, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, tenant_id, name, description, steps, created_at, updated_at, created_by, updated_by
+		 FROM escalation_policies WHERE tenant_id = $1 ORDER BY created_at DESC`, tenantID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("listing escalation policies: %w", err)
+	}
+	defer rows.Close()
+
+	var policies []*escalationpolicy.EscalationPolicy
+	for rows.Next() {
+		var p escalationpolicy.EscalationPolicy
+		var stepsJSON []byte
+		err := rows.Scan(&p.ID, &p.TenantID, &p.Name, &p.Description, &stepsJSON, &p.CreatedAt, &p.UpdatedAt, &p.CreatedBy, &p.UpdatedBy)
+		if err != nil {
+			return nil, fmt.Errorf("scanning escalation policy: %w", err)
+		}
+		if err := json.Unmarshal(stepsJSON, &p.Steps); err != nil {
+			return nil, fmt.Errorf("unmarshaling escalation steps: %w", err)
+		}
+		policies = append(policies, &p)
+	}
+	return policies, nil
 }

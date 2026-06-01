@@ -68,6 +68,12 @@ func (r *TenantRepository) List(ctx context.Context, filter port.TenantFilter) (
 	args := []any{}
 	argIdx := 1
 
+	if filter.ID != nil {
+		query += fmt.Sprintf(" AND id = $%d", argIdx)
+		args = append(args, *filter.ID)
+		argIdx++
+	}
+
 	if filter.Status != nil {
 		query += fmt.Sprintf(" AND status = $%d", argIdx)
 		args = append(args, string(*filter.Status))

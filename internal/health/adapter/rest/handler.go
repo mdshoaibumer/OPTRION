@@ -34,6 +34,14 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/health/anomalies", h.GetAnomalies)
 }
 
+// RegisterAuthenticatedRoutes registers health routes wrapped with authentication middleware.
+func (h *Handler) RegisterAuthenticatedRoutes(mux *http.ServeMux, authWrap func(http.Handler) http.Handler) {
+	mux.Handle("GET /api/v1/health/summary", authWrap(http.HandlerFunc(h.GetSummary)))
+	mux.Handle("GET /api/v1/health/components", authWrap(http.HandlerFunc(h.GetComponents)))
+	mux.Handle("GET /api/v1/health/history", authWrap(http.HandlerFunc(h.GetHistory)))
+	mux.Handle("GET /api/v1/health/anomalies", authWrap(http.HandlerFunc(h.GetAnomalies)))
+}
+
 // GetSummary handles GET /api/v1/health/summary?tenant_id=...
 func (h *Handler) GetSummary(w http.ResponseWriter, r *http.Request) {
 	tenantID := r.URL.Query().Get("tenant_id")

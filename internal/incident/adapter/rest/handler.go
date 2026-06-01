@@ -40,6 +40,20 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/incidents/stats", h.GetStats)
 }
 
+// RegisterAuthenticatedRoutes registers incident routes wrapped with authentication middleware.
+func (h *Handler) RegisterAuthenticatedRoutes(mux *http.ServeMux, authWrap func(http.Handler) http.Handler) {
+	mux.Handle("GET /api/v1/incidents", authWrap(http.HandlerFunc(h.ListIncidents)))
+	mux.Handle("GET /api/v1/incidents/{id}", authWrap(http.HandlerFunc(h.GetIncident)))
+	mux.Handle("POST /api/v1/incidents/{id}/acknowledge", authWrap(http.HandlerFunc(h.Acknowledge)))
+	mux.Handle("POST /api/v1/incidents/{id}/investigate", authWrap(http.HandlerFunc(h.Investigate)))
+	mux.Handle("POST /api/v1/incidents/{id}/resolve", authWrap(http.HandlerFunc(h.Resolve)))
+	mux.Handle("POST /api/v1/incidents/{id}/close", authWrap(http.HandlerFunc(h.CloseIncident)))
+	mux.Handle("POST /api/v1/incidents/{id}/comments", authWrap(http.HandlerFunc(h.AddComment)))
+	mux.Handle("GET /api/v1/incidents/{id}/timeline", authWrap(http.HandlerFunc(h.GetTimeline)))
+	mux.Handle("GET /api/v1/incidents/timeline", authWrap(http.HandlerFunc(h.GetTenantTimeline)))
+	mux.Handle("GET /api/v1/incidents/stats", authWrap(http.HandlerFunc(h.GetStats)))
+}
+
 // ListIncidents handles GET /api/v1/incidents?tenant_id=...
 func (h *Handler) ListIncidents(w http.ResponseWriter, r *http.Request) {
 	tenantID := r.URL.Query().Get("tenant_id")

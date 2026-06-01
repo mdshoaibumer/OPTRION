@@ -8,7 +8,12 @@ import (
 	"net/http"
 	"time"
 
+	aipg "github.com/optrion/optrion/internal/ai/adapter/postgres"
+	"github.com/optrion/optrion/internal/ai/adapter/provider"
+	airest "github.com/optrion/optrion/internal/ai/adapter/rest/v1"
+	aiservice "github.com/optrion/optrion/internal/ai/app/service"
 	alertpg "github.com/optrion/optrion/internal/alert/adapter/repository"
+	alertrest "github.com/optrion/optrion/internal/alert/adapter/rest/v1"
 	"github.com/optrion/optrion/internal/alert/adapter/telegram"
 	alertevent "github.com/optrion/optrion/internal/alert/app/event"
 	alertservice "github.com/optrion/optrion/internal/alert/app/service"
@@ -29,6 +34,12 @@ import (
 	"github.com/optrion/optrion/internal/platform/eventbus"
 	"github.com/optrion/optrion/internal/platform/logger"
 	"github.com/optrion/optrion/internal/platform/server"
+	recpg "github.com/optrion/optrion/internal/recommendation/adapter/postgres"
+	recrest "github.com/optrion/optrion/internal/recommendation/adapter/rest/v1"
+	recservice "github.com/optrion/optrion/internal/recommendation/app/service"
+	regpg "github.com/optrion/optrion/internal/registration/adapter/postgres"
+	regrest "github.com/optrion/optrion/internal/registration/adapter/rest/v1"
+	regapp "github.com/optrion/optrion/internal/registration/app"
 	tenantpg "github.com/optrion/optrion/internal/tenant/adapter/postgres"
 	tenantrest "github.com/optrion/optrion/internal/tenant/adapter/rest"
 	tenantapp "github.com/optrion/optrion/internal/tenant/app"
@@ -45,18 +56,24 @@ type Container struct {
 	Server   *server.Server
 
 	// Services
-	TenantService   *tenantapp.TenantService
-	HealthService   *healthapp.HealthService
-	IncidentService *incidentapp.IncidentService
-	AlertEngine     alertservice.AlertEngine
+	TenantService         *tenantapp.TenantService
+	HealthService         *healthapp.HealthService
+	IncidentService       *incidentapp.IncidentService
+	AlertEngine           alertservice.AlertEngine
+	AIService             *aiservice.RootCauseService
+	RecommendationService *recservice.RecommendationService
 
 	// Infrastructure
 	EventBus  *eventbus.Bus
 	Scheduler *scheduler.Scheduler
 
 	// Internal components for lifecycle management
-	Router *server.Router
-	health *server.HealthHandler
+	Router              *server.Router
+	health              *server.HealthHandler
+	registrationHandler *regrest.RegistrationHandler
+	alertRepo           *alertpg.AlertPostgresRepository
+	alertRuleRepo       *alertpg.AlertRulePostgresRepository
+	escalationRepo      *alertpg.EscalationPolicyPostgresRepository
 }
 
 // Migrations is set by main.go to provide embedded migration files.
@@ -161,11 +178,15 @@ func NewContainer(ctx context.Context) (*Container, error) {
 
 	// 11. Wire alert engine
 	telegramSender := telegram.NewTelegramSender(30, 2*time.Second)
-	dedup := alertservice.NewDeduplicationService(5 * time.Minute)
+	dedup := alertservice.NewDeduplicationService(5 * time.Minute).WithRedis(redis.Client())
 	alertRuleRepo := alertpg.NewAlertRulePostgresRepository(pool)
 	alertRepo := alertpg.NewAlertPostgresRepository(pool)
 	alertChannelRepo := alertpg.NewAlertChannelPostgresRepository(pool)
 	alertDeliveryRepo := alertpg.NewAlertDeliveryPostgresRepository(pool)
+	escalationRepo := alertpg.NewEscalationPolicyPostgresRepository(pool)
+	c.alertRepo = alertRepo
+	c.alertRuleRepo = alertRuleRepo
+	c.escalationRepo = escalationRepo
 	c.AlertEngine = alertservice.NewAlertEngine(
 		alertRuleRepo, alertRepo, alertChannelRepo, alertDeliveryRepo,
 		dedup, telegramSender,
@@ -181,8 +202,58 @@ func NewContainer(ctx context.Context) (*Container, error) {
 		return c.AlertEngine.ProcessEvent(ctx, alertEventFromIncidentOpened(incEvt))
 	})
 
+	// 12b. Wire AI root cause analysis service
+	if cfg.AI.Enabled && cfg.AI.APIKey != "" {
+		var aiProvider provider.AIProvider
+		switch cfg.AI.Provider {
+		case "gemini":
+			aiProvider = provider.NewGeminiProvider(provider.GeminiConfig{
+				APIKey:    cfg.AI.APIKey,
+				Model:     cfg.AI.Model,
+				MaxTokens: cfg.AI.MaxTokens,
+			})
+		default:
+			aiProvider = provider.NewGeminiProvider(provider.GeminiConfig{
+				APIKey:    cfg.AI.APIKey,
+				Model:     cfg.AI.Model,
+				MaxTokens: cfg.AI.MaxTokens,
+			})
+		}
+
+		aiAnalysisRepo := aipg.NewAIAnalysisRepository(pool)
+		aiContextRepo := aipg.NewAIContextRepository(pool)
+		aiReportRepo := aipg.NewRootCauseReportRepository(pool)
+		incidentCtxProvider := aiservice.NewIncidentContextProvider(c.IncidentService)
+
+		c.AIService = aiservice.NewRootCauseService(
+			aiProvider, aiAnalysisRepo, aiContextRepo, aiReportRepo,
+			incidentCtxProvider, c.Logger.With("component", "ai-rootcause"),
+		)
+
+		// Wire recommendation service (reuses same AI provider)
+		recRepo := recpg.NewRecommendationRepository(pool)
+		c.RecommendationService = recservice.NewRecommendationService(
+			aiProvider, recRepo, incidentCtxProvider,
+			c.Logger.With("component", "recommendation"),
+		)
+
+		c.Logger.Info("AI services enabled", "provider", cfg.AI.Provider, "model", cfg.AI.Model)
+	} else {
+		c.Logger.Info("AI services disabled (set AI_ENABLED=true and AI_API_KEY to enable)")
+	}
+
 	// 13. API Key authentication
 	apiKeyRepo := tenantpg.NewAPIKeyRepository(pool)
+
+	// 13b. Registration service
+	regRepo := regpg.NewRegistrationRepository(pool)
+	apiKeyGen := regpg.NewAPIKeyGeneratorAdapter(apiKeyRepo)
+	regService := regapp.NewRegistrationService(
+		c.TenantService, apiKeyGen, regRepo,
+		c.Logger.With("component", "registration"),
+		fmt.Sprintf("http://%s:%d", cfg.HTTP.Host, cfg.HTTP.Port),
+	)
+	c.registrationHandler = regrest.NewRegistrationHandler(regService)
 
 	// 14. Health handler
 	c.health = server.NewHealthHandler(db, redis, cfg.App.Version, c.Logger.With("component", "health"))
@@ -217,20 +288,51 @@ func (c *Container) registerRoutes() {
 	c.Router.HandleFunc("GET /healthz", c.health.Liveness())
 	c.Router.HandleFunc("GET /readyz", c.health.Readiness())
 
-	// API version info
+	// API version info (no auth required)
 	c.Router.HandleFunc("GET /api/v1/info", c.infoHandler())
 
-	// Tenant domain routes
+	// Registration endpoint (no auth — this creates a new tenant + API key)
+	c.Router.HandleFunc("POST /api/v1/register", c.registrationHandler.Register)
+
+	// Tenant domain routes (authenticated)
 	tenantHandler := tenantrest.NewHandler(c.TenantService, c.Logger.With("component", "tenant-api"))
-	tenantHandler.RegisterRoutes(c.Router.Mux())
+	tenantHandler.RegisterAuthenticatedRoutes(c.Router.Mux(), c.Router.AuthenticatedHandler)
 
-	// Health monitoring routes
+	// Health monitoring routes (authenticated)
 	healthHandler := healthrest.NewHandler(c.HealthService, c.Logger.With("component", "health-api"))
-	healthHandler.RegisterRoutes(c.Router.Mux())
+	healthHandler.RegisterAuthenticatedRoutes(c.Router.Mux(), c.Router.AuthenticatedHandler)
 
-	// Incident intelligence routes
+	// Incident intelligence routes (authenticated)
 	incidentHandler := incidentrest.NewHandler(c.IncidentService, c.Logger.With("component", "incident-api"))
-	incidentHandler.RegisterRoutes(c.Router.Mux())
+	incidentHandler.RegisterAuthenticatedRoutes(c.Router.Mux(), c.Router.AuthenticatedHandler)
+
+	// Alert routes (authenticated)
+	alertHandler := alertrest.NewAlertHandler(c.alertRepo, c.Logger.With("component", "alert-api"))
+	c.Router.Mux().Handle("GET /api/v1/alerts", c.Router.AuthenticatedHandler(http.HandlerFunc(alertHandler.GetAlerts)))
+	c.Router.Mux().Handle("GET /api/v1/alerts/{id}", c.Router.AuthenticatedHandler(http.HandlerFunc(alertHandler.GetAlertByID)))
+	c.Router.Mux().Handle("PATCH /api/v1/alerts/{id}", c.Router.AuthenticatedHandler(http.HandlerFunc(alertHandler.UpdateAlertStatus)))
+
+	alertRuleHandler := alertrest.NewAlertRuleHandler(c.alertRuleRepo, c.Logger.With("component", "alertrule-api"))
+	c.Router.Mux().Handle("GET /api/v1/alert-rules", c.Router.AuthenticatedHandler(http.HandlerFunc(alertRuleHandler.GetAlertRules)))
+	c.Router.Mux().Handle("POST /api/v1/alert-rules", c.Router.AuthenticatedHandler(http.HandlerFunc(alertRuleHandler.PostAlertRule)))
+	c.Router.Mux().Handle("PATCH /api/v1/alert-rules/{id}", c.Router.AuthenticatedHandler(http.HandlerFunc(alertRuleHandler.PatchAlertRule)))
+
+	escalationHandler := alertrest.NewEscalationPolicyHandler(c.escalationRepo, c.Logger.With("component", "escalation-api"))
+	c.Router.Mux().Handle("GET /api/v1/escalation-policies", c.Router.AuthenticatedHandler(http.HandlerFunc(escalationHandler.GetEscalationPolicies)))
+	c.Router.Mux().Handle("POST /api/v1/escalation-policies", c.Router.AuthenticatedHandler(http.HandlerFunc(escalationHandler.PostEscalationPolicy)))
+	c.Router.Mux().Handle("PATCH /api/v1/escalation-policies/{id}", c.Router.AuthenticatedHandler(http.HandlerFunc(escalationHandler.PatchEscalationPolicy)))
+
+	// AI analysis routes (authenticated)
+	aiHandler := airest.NewAnalysisHandler(c.AIService)
+	c.Router.Mux().Handle("GET /api/v1/analysis", c.Router.AuthenticatedHandler(http.HandlerFunc(aiHandler.GetAnalysis)))
+	c.Router.Mux().Handle("GET /api/v1/incidents/{id}/analysis", c.Router.AuthenticatedHandler(http.HandlerFunc(aiHandler.GetIncidentAnalysis)))
+	c.Router.Mux().Handle("POST /api/v1/incidents/{id}/analyze", c.Router.AuthenticatedHandler(http.HandlerFunc(aiHandler.PostIncidentAnalyze)))
+
+	// Recommendation routes (authenticated)
+	recHandler := recrest.NewRecommendationHandler(c.RecommendationService)
+	c.Router.Mux().Handle("GET /api/v1/recommendations", c.Router.AuthenticatedHandler(http.HandlerFunc(recHandler.GetRecommendations)))
+	c.Router.Mux().Handle("GET /api/v1/incidents/{id}/recommendations", c.Router.AuthenticatedHandler(http.HandlerFunc(recHandler.GetIncidentRecommendations)))
+	c.Router.Mux().Handle("POST /api/v1/incidents/{id}/recommend", c.Router.AuthenticatedHandler(http.HandlerFunc(recHandler.PostIncidentRecommend)))
 }
 
 // infoHandler returns application information.

@@ -39,6 +39,19 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/components", h.ListComponents)
 }
 
+// RegisterAuthenticatedRoutes registers tenant routes wrapped with authentication middleware.
+func (h *Handler) RegisterAuthenticatedRoutes(mux *http.ServeMux, authWrap func(http.Handler) http.Handler) {
+	mux.Handle("POST /api/v1/tenants", authWrap(http.HandlerFunc(h.CreateTenant)))
+	mux.Handle("GET /api/v1/tenants", authWrap(http.HandlerFunc(h.ListTenants)))
+	mux.Handle("GET /api/v1/tenants/{id}", authWrap(http.HandlerFunc(h.GetTenant)))
+	mux.Handle("POST /api/v1/products", authWrap(http.HandlerFunc(h.CreateProduct)))
+	mux.Handle("GET /api/v1/products", authWrap(http.HandlerFunc(h.ListProducts)))
+	mux.Handle("POST /api/v1/environments", authWrap(http.HandlerFunc(h.CreateEnvironment)))
+	mux.Handle("GET /api/v1/environments", authWrap(http.HandlerFunc(h.ListEnvironments)))
+	mux.Handle("POST /api/v1/components", authWrap(http.HandlerFunc(h.RegisterComponent)))
+	mux.Handle("GET /api/v1/components", authWrap(http.HandlerFunc(h.ListComponents)))
+}
+
 // CreateTenant handles POST /api/v1/tenants
 func (h *Handler) CreateTenant(w http.ResponseWriter, r *http.Request) {
 	var req CreateTenantRequest
@@ -70,6 +83,11 @@ func (h *Handler) ListTenants(w http.ResponseWriter, r *http.Request) {
 	filter := port.TenantFilter{
 		Limit:  parseIntQuery(r, "limit", 50),
 		Offset: parseIntQuery(r, "offset", 0),
+	}
+
+	// Enforce tenant isolation: authenticated users can only see their own tenant
+	if authTenantID := server.TenantIDFromContext(r.Context()); authTenantID != "" {
+		filter.ID = &authTenantID
 	}
 
 	if status := r.URL.Query().Get("status"); status != "" {

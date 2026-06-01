@@ -18,6 +18,7 @@ type TenantRepository interface {
 
 // TenantFilter defines filtering options for listing tenants.
 type TenantFilter struct {
+	ID     *string // If set, restrict to this specific tenant ID (for tenant isolation)
 	Status *domain.Status
 	Limit  int
 	Offset int

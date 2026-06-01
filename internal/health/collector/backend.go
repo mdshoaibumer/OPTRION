@@ -13,8 +13,9 @@ import (
 
 // BackendConfig holds configuration for backend monitoring.
 type BackendConfig struct {
-	TargetURL string
-	Timeout   time.Duration
+	TargetURL     string
+	Timeout       time.Duration
+	SkipSSRFCheck bool // Only set to true for internal/test collectors
 }
 
 // BackendCollector monitors a backend HTTP service.
@@ -28,10 +29,19 @@ type BackendCollector struct {
 }
 
 // NewBackendCollector creates a new backend HTTP collector.
-func NewBackendCollector(tenantID, componentID string, cfg BackendConfig) *BackendCollector {
+// Returns an error if the target URL fails SSRF validation.
+func NewBackendCollector(tenantID, componentID string, cfg BackendConfig) (*BackendCollector, error) {
 	if cfg.Timeout == 0 {
 		cfg.Timeout = 10 * time.Second
 	}
+
+	// Validate URL to prevent SSRF (skip for explicitly allowed URLs)
+	if !cfg.SkipSSRFCheck {
+		if err := ValidateTargetURL(cfg.TargetURL); err != nil {
+			return nil, fmt.Errorf("SSRF protection: %w", err)
+		}
+	}
+
 	return &BackendCollector{
 		tenantID:    tenantID,
 		componentID: componentID,
@@ -40,7 +50,7 @@ func NewBackendCollector(tenantID, componentID string, cfg BackendConfig) *Backe
 			Timeout: cfg.Timeout,
 		},
 		startTime: time.Now(),
-	}
+	}, nil
 }
 
 func (c *BackendCollector) Type() domain.CollectorType { return domain.CollectorBackend }

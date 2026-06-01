@@ -25,6 +25,7 @@ type Config struct {
 	Database DatabaseConfig
 	Redis    RedisConfig
 	Log      LogConfig
+	Auth     AuthConfig
 }
 
 // AppConfig holds general application settings.
@@ -42,6 +43,13 @@ type HTTPConfig struct {
 	WriteTimeout    time.Duration
 	IdleTimeout     time.Duration
 	ShutdownTimeout time.Duration
+	CORSOrigins     []string
+	RateLimitRPS    int
+}
+
+// AuthConfig holds API key authentication settings.
+type AuthConfig struct {
+	Enabled bool
 }
 
 // DatabaseConfig holds PostgreSQL connection settings.
@@ -105,6 +113,8 @@ func Load() (*Config, error) {
 			WriteTimeout:    envOrDefaultDuration("HTTP_WRITE_TIMEOUT", 30*time.Second),
 			IdleTimeout:     envOrDefaultDuration("HTTP_IDLE_TIMEOUT", 60*time.Second),
 			ShutdownTimeout: envOrDefaultDuration("HTTP_SHUTDOWN_TIMEOUT", 15*time.Second),
+			CORSOrigins:     envOrDefaultSlice("CORS_ALLOWED_ORIGINS", []string{}),
+			RateLimitRPS:    envOrDefaultInt("RATE_LIMIT_RPS", 100),
 		},
 		Database: DatabaseConfig{
 			Host:            envOrDefault("DB_HOST", "localhost"),
@@ -132,6 +142,9 @@ func Load() (*Config, error) {
 		Log: LogConfig{
 			Level:  envOrDefault("LOG_LEVEL", "info"),
 			Format: envOrDefault("LOG_FORMAT", "json"),
+		},
+		Auth: AuthConfig{
+			Enabled: envOrDefaultBool("AUTH_ENABLED", true),
 		},
 	}
 
@@ -244,4 +257,32 @@ func envOrDefaultDuration(key string, defaultValue time.Duration) time.Duration 
 		return defaultValue
 	}
 	return d
+}
+
+func envOrDefaultSlice(key string, defaultValue []string) []string {
+	v := os.Getenv(key)
+	if v == "" {
+		return defaultValue
+	}
+	parts := strings.Split(v, ",")
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	return result
+}
+
+func envOrDefaultBool(key string, defaultValue bool) bool {
+	v := os.Getenv(key)
+	if v == "" {
+		return defaultValue
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return defaultValue
+	}
+	return b
 }

@@ -100,6 +100,29 @@ func (r *ComponentRepository) ListByEnvironment(ctx context.Context, environment
 	return comps, rows.Err()
 }
 
+// ListByTenant returns all components belonging to a tenant.
+func (r *ComponentRepository) ListByTenant(ctx context.Context, tenantID string) ([]*domain.Component, error) {
+	q := querier(ctx, r.pool)
+
+	rows, err := q.Query(ctx,
+		`SELECT id, tenant_id, product_id, environment_id, name, slug, kind, endpoint_url, status, metadata, created_at, updated_at
+		 FROM components WHERE tenant_id = $1 ORDER BY created_at DESC`, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("listing components by tenant: %w", err)
+	}
+	defer rows.Close()
+
+	var comps []*domain.Component
+	for rows.Next() {
+		c, err := scanComponentRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		comps = append(comps, c)
+	}
+	return comps, rows.Err()
+}
+
 // Update persists changes to an existing component.
 func (r *ComponentRepository) Update(ctx context.Context, comp *domain.Component) error {
 	q := querier(ctx, r.pool)

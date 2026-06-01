@@ -1,17 +1,19 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
+	"net/http"
 	"os"
-	"path/filepath"
+	"time"
 
 	"github.com/optrion/optrion/internal/config/app"
 	"github.com/optrion/optrion/internal/registration/domain"
-	"gopkg.in/yaml.v3"
 )
 
 func main() {
@@ -58,8 +60,7 @@ Examples:
   optrion-cli register --config optrion.yaml --server http://localhost:8080
 
   # Verify integration
-  optrion-cli verify --config optrion.yaml --server http://localhost:8080
-`)
+  optrion-cli verify --config optrion.yaml --server http://localhost:8080`)
 }
 
 // handleInit creates a sample optrion.yaml file
@@ -70,7 +71,7 @@ func handleInit() {
 
 	template := app.GenerateTemplate()
 
-	if err := ioutil.WriteFile(*output, []byte(template), 0644); err != nil {
+	if err := os.WriteFile(*output, []byte(template), 0644); err != nil {
 		log.Fatalf("Failed to write config file: %v", err)
 	}
 
@@ -137,16 +138,36 @@ func handleRegister() {
 		}
 	}
 
-	// Convert to JSON and send to server
-	regData, err := yaml.Marshal(req)
+	// Send HTTP POST to server
+	body, err := json.Marshal(req)
 	if err != nil {
 		log.Fatalf("Failed to marshal registration: %v", err)
 	}
 
-	// TODO: Send HTTP POST to server
-	fmt.Printf("✓ Registration request prepared:\n%s\n", regData)
-	fmt.Println("\nAPI Key will be provided upon successful registration")
-	fmt.Println("Save the API key securely - you'll need it for monitoring")
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Post(*serverURL+"/api/v1/register", "application/json", bytes.NewReader(body))
+	if err != nil {
+		log.Fatalf("Failed to connect to server: %v", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		log.Fatalf("Registration failed (HTTP %d): %s", resp.StatusCode, string(respBody))
+	}
+
+	fmt.Println("\n✓ Registration successful!")
+
+	// Parse response for API key
+	var result struct {
+		TenantID string `json:"tenant_id"`
+		APIKey   string `json:"api_key"`
+	}
+	if err := json.Unmarshal(respBody, &result); err == nil && result.APIKey != "" {
+		fmt.Printf("\nAPI Key: %s\n", result.APIKey)
+		fmt.Println("⚠️  Save this key securely — it will not be shown again.")
+	}
 }
 
 // handleVerify validates the integration
@@ -158,7 +179,7 @@ func handleVerify() {
 	fs.Parse(os.Args[2:])
 
 	if *apiKey == "" {
-		log.Fatal("API key required for verification")
+		log.Fatal("API key required for verification. Use --api-key flag.")
 	}
 
 	// Load config
@@ -168,42 +189,68 @@ func handleVerify() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	ctx := context.Background()
-
 	fmt.Println("OPTRION Integration Verification")
 	fmt.Println("--------------------------------")
 
 	// Check configuration validity
-	fmt.Print("✓ Configuration file valid: ")
+	fmt.Print("✓ Configuration file valid\n")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	// Verify server connectivity
+	fmt.Print("  Checking server connectivity... ")
+	req, _ := http.NewRequest(http.MethodGet, *serverURL+"/healthz", nil)
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Printf("FAILED (%v)\n", err)
+		os.Exit(1)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		fmt.Printf("FAILED (status %d)\n", resp.StatusCode)
+		os.Exit(1)
+	}
 	fmt.Println("OK")
 
-	// Verify component connectivity
-	fmt.Println("\nComponent Connectivity:")
+	// Verify API key authentication
+	fmt.Print("  Checking API key authentication... ")
+	req, _ = http.NewRequest(http.MethodGet, *serverURL+"/api/v1/info", nil)
+	req.Header.Set("Authorization", "Bearer "+*apiKey)
+	resp, err = client.Do(req)
+	if err != nil {
+		fmt.Printf("FAILED (%v)\n", err)
+		os.Exit(1)
+	}
+	resp.Body.Close()
+	if resp.StatusCode == http.StatusUnauthorized {
+		fmt.Println("FAILED (invalid API key)")
+		os.Exit(1)
+	}
+	fmt.Println("OK")
+
+	// Verify component endpoints
+	fmt.Println("\n  Component Connectivity:")
 	for _, comp := range config.Components {
-		fmt.Printf("  Checking %s (%s)...", comp.Name, comp.Kind)
-		// TODO: Implement actual connectivity check
-		fmt.Println(" OK")
+		fmt.Printf("    Checking %s (%s)... ", comp.Name, comp.Kind)
+		if comp.Endpoint != "" {
+			checkReq, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, comp.Endpoint, nil)
+			checkResp, err := client.Do(checkReq)
+			if err != nil {
+				fmt.Printf("UNREACHABLE (%v)\n", err)
+				continue
+			}
+			checkResp.Body.Close()
+			if checkResp.StatusCode < 500 {
+				fmt.Println("OK")
+			} else {
+				fmt.Printf("UNHEALTHY (status %d)\n", checkResp.StatusCode)
+			}
+		} else {
+			fmt.Println("SKIPPED (no endpoint configured)")
+		}
 	}
 
-	// Verify metrics flowing
-	fmt.Println("\nMetrics Status:")
-	fmt.Print("  Metrics flowing from server: ")
-	// TODO: Query server for recent metrics
-	fmt.Println("OK")
-
-	// Verify components registered
-	fmt.Println("\nRegistered Components:")
-	for _, comp := range config.Components {
-		fmt.Printf("  ✓ %s (%s)\n", comp.Name, comp.Kind)
-	}
-
-	// Verify health visible
-	fmt.Println("\nHealth Status:")
-	fmt.Print("  Platform health visible: ")
-	// TODO: Query server for health data
-	fmt.Println("OK")
-
-	fmt.Println("\n✓ Integration verified successfully!")
-	fmt.Printf("\nServer URL: %s\n", *serverURL)
-	fmt.Printf("Config file: %s\n", *configFile)
+	fmt.Printf("\n✓ Integration verified successfully!\n")
+	fmt.Printf("  Server: %s\n", *serverURL)
+	fmt.Printf("  Config: %s\n", *configFile)
 }

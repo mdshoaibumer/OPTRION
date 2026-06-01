@@ -116,7 +116,7 @@ func (h *Handler) GetIncident(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Acknowledge(w http.ResponseWriter, r *http.Request) {
 	incidentID := r.PathValue("id")
 	var req ActionRequest
-	if err := server.ReadJSON(r, &req); err != nil {
+	if err := server.ReadJSON(w, r, &req); err != nil {
 		server.WriteJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid request body"})
 		return
 	}
@@ -133,7 +133,7 @@ func (h *Handler) Acknowledge(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Investigate(w http.ResponseWriter, r *http.Request) {
 	incidentID := r.PathValue("id")
 	var req ActionRequest
-	if err := server.ReadJSON(r, &req); err != nil {
+	if err := server.ReadJSON(w, r, &req); err != nil {
 		server.WriteJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid request body"})
 		return
 	}
@@ -150,7 +150,7 @@ func (h *Handler) Investigate(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Resolve(w http.ResponseWriter, r *http.Request) {
 	incidentID := r.PathValue("id")
 	var req ResolveRequest
-	if err := server.ReadJSON(r, &req); err != nil {
+	if err := server.ReadJSON(w, r, &req); err != nil {
 		server.WriteJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid request body"})
 		return
 	}
@@ -167,7 +167,7 @@ func (h *Handler) Resolve(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CloseIncident(w http.ResponseWriter, r *http.Request) {
 	incidentID := r.PathValue("id")
 	var req CloseRequest
-	if err := server.ReadJSON(r, &req); err != nil {
+	if err := server.ReadJSON(w, r, &req); err != nil {
 		server.WriteJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid request body"})
 		return
 	}
@@ -184,7 +184,7 @@ func (h *Handler) CloseIncident(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) AddComment(w http.ResponseWriter, r *http.Request) {
 	incidentID := r.PathValue("id")
 	var req CommentRequest
-	if err := server.ReadJSON(r, &req); err != nil {
+	if err := server.ReadJSON(w, r, &req); err != nil {
 		server.WriteJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid request body"})
 		return
 	}

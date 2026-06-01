@@ -127,11 +127,12 @@ func TestSecurityHeaders(t *testing.T) {
 }
 
 func TestCORS_Preflight(t *testing.T) {
-	handler := CORS()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := CORS("*")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
 	req := httptest.NewRequest(http.MethodOptions, "/", nil)
+	req.Header.Set("Origin", "http://example.com")
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)
@@ -140,8 +141,8 @@ func TestCORS_Preflight(t *testing.T) {
 		t.Errorf("expected status 204 for preflight, got %d", rec.Code)
 	}
 
-	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "*" {
-		t.Errorf("expected CORS origin '*', got %q", got)
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "http://example.com" {
+		t.Errorf("expected CORS origin 'http://example.com', got %q", got)
 	}
 }
 
@@ -187,13 +188,14 @@ func TestWriteError(t *testing.T) {
 func TestReadJSON(t *testing.T) {
 	body := `{"name": "optrion", "version": 1}`
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	w := httptest.NewRecorder()
 
 	var dst struct {
 		Name    string `json:"name"`
 		Version int    `json:"version"`
 	}
 
-	if err := ReadJSON(req, &dst); err != nil {
+	if err := ReadJSON(w, req, &dst); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -208,9 +210,10 @@ func TestReadJSON(t *testing.T) {
 func TestReadJSON_EmptyBody(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	req.Body = nil
+	w := httptest.NewRecorder()
 
 	var dst struct{}
-	if err := ReadJSON(req, &dst); err == nil {
+	if err := ReadJSON(w, req, &dst); err == nil {
 		t.Error("expected error for empty body")
 	}
 }

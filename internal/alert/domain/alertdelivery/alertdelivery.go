@@ -2,16 +2,14 @@ package alertdelivery
 
 import (
 	"time"
-
-	"github.com/google/uuid"
 )
 
 // AlertDelivery tracks the delivery status of an alert to a channel.
 type AlertDelivery struct {
-	ID        uuid.UUID
-	TenantID  uuid.UUID
-	AlertID   uuid.UUID
-	ChannelID uuid.UUID
+	ID        string
+	TenantID  string
+	AlertID   string
+	ChannelID string
 	Status    DeliveryStatus
 	Attempts  int
 	LastError string

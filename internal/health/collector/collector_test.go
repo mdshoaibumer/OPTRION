@@ -19,9 +19,10 @@ func TestBackendCollector_HealthyEndpoint(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := collector.NewBackendCollector("tenant-1", "comp-1", collector.BackendConfig{
-		TargetURL: srv.URL,
-		Timeout:   5 * time.Second,
+	c, _ := collector.NewBackendCollector("tenant-1", "comp-1", collector.BackendConfig{
+		TargetURL:     srv.URL,
+		Timeout:       5 * time.Second,
+		SkipSSRFCheck: true,
 	})
 
 	if c.Type() != domain.CollectorBackend {
@@ -76,9 +77,10 @@ func TestBackendCollector_ServerError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := collector.NewBackendCollector("tenant-1", "comp-1", collector.BackendConfig{
-		TargetURL: srv.URL,
-		Timeout:   5 * time.Second,
+	c, _ := collector.NewBackendCollector("tenant-1", "comp-1", collector.BackendConfig{
+		TargetURL:     srv.URL,
+		Timeout:       5 * time.Second,
+		SkipSSRFCheck: true,
 	})
 
 	result, err := c.Collect(context.Background())
@@ -105,9 +107,10 @@ func TestBackendCollector_ClientError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := collector.NewBackendCollector("tenant-1", "comp-1", collector.BackendConfig{
-		TargetURL: srv.URL,
-		Timeout:   5 * time.Second,
+	c, _ := collector.NewBackendCollector("tenant-1", "comp-1", collector.BackendConfig{
+		TargetURL:     srv.URL,
+		Timeout:       5 * time.Second,
+		SkipSSRFCheck: true,
 	})
 
 	result, err := c.Collect(context.Background())
@@ -129,9 +132,10 @@ func TestBackendCollector_ClientError(t *testing.T) {
 }
 
 func TestBackendCollector_Unreachable(t *testing.T) {
-	c := collector.NewBackendCollector("tenant-1", "comp-1", collector.BackendConfig{
-		TargetURL: "http://127.0.0.1:1", // Non-routable port
-		Timeout:   1 * time.Second,
+	c, _ := collector.NewBackendCollector("tenant-1", "comp-1", collector.BackendConfig{
+		TargetURL:     "http://127.0.0.1:1", // Non-routable port
+		Timeout:       1 * time.Second,
+		SkipSSRFCheck: true,
 	})
 
 	result, err := c.Collect(context.Background())
@@ -156,9 +160,10 @@ func TestBackendCollector_ContextCancelled(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := collector.NewBackendCollector("tenant-1", "comp-1", collector.BackendConfig{
-		TargetURL: srv.URL,
-		Timeout:   10 * time.Second,
+	c, _ := collector.NewBackendCollector("tenant-1", "comp-1", collector.BackendConfig{
+		TargetURL:     srv.URL,
+		Timeout:       10 * time.Second,
+		SkipSSRFCheck: true,
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)

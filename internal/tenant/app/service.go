@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/optrion/optrion/internal/tenant/domain"
 	"github.com/optrion/optrion/internal/tenant/port"
@@ -405,4 +406,48 @@ func (s *TenantService) ListComponents(ctx context.Context, environmentID string
 		filter.Limit = 100
 	}
 	return s.components.ListByEnvironment(ctx, environmentID, filter)
+}
+
+// CreateComponentCmd holds data for creating a component (used by registration workflow).
+type CreateComponentCmd struct {
+	TenantID      string
+	ProductID     string
+	EnvironmentID string
+	Name          string
+	Kind          string
+	Description   string
+	Endpoint      string
+	Port          int
+}
+
+// CreateComponent creates a component using a simplified command (delegates to RegisterComponent).
+func (s *TenantService) CreateComponent(ctx context.Context, cmd CreateComponentCmd) (*domain.Component, error) {
+	// If TenantID/ProductID not provided, look them up from environment
+	tenantID := cmd.TenantID
+	productID := cmd.ProductID
+	if tenantID == "" || productID == "" {
+		env, err := s.environments.GetByID(ctx, cmd.EnvironmentID)
+		if err != nil {
+			return nil, fmt.Errorf("looking up environment: %w", err)
+		}
+		if tenantID == "" {
+			tenantID = env.TenantID
+		}
+		if productID == "" {
+			productID = env.ProductID
+		}
+	}
+
+	// Generate slug from name
+	slugStr := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(cmd.Name), " ", "-"))
+
+	return s.RegisterComponent(ctx, RegisterComponentCmd{
+		TenantID:      tenantID,
+		ProductID:     productID,
+		EnvironmentID: cmd.EnvironmentID,
+		Name:          cmd.Name,
+		Slug:          slugStr,
+		Kind:          cmd.Kind,
+		EndpointURL:   cmd.Endpoint,
+	})
 }

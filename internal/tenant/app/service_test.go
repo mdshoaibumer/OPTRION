@@ -196,6 +196,14 @@ func (m *mockComponentRepo) ListByEnvironment(_ context.Context, _ string, _ por
 	return result, nil
 }
 
+func (m *mockComponentRepo) ListByTenant(_ context.Context, _ string) ([]*domain.Component, error) {
+	var result []*domain.Component
+	for _, c := range m.components {
+		result = append(result, c)
+	}
+	return result, nil
+}
+
 func (m *mockComponentRepo) Update(_ context.Context, c *domain.Component) error {
 	m.components[c.ID] = c
 	return nil

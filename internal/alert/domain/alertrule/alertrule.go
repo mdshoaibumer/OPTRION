@@ -2,25 +2,23 @@ package alertrule
 
 import (
 	"time"
-
-	"github.com/google/uuid"
 )
 
 // AlertRule defines the conditions for generating alerts.
 type AlertRule struct {
-	ID                 uuid.UUID
-	TenantID           uuid.UUID
+	ID                 string
+	TenantID           string
 	Name               string
 	Description        string
 	Severity           string // Info, Warning, Minor, Major, Critical
 	Enabled            bool
 	Conditions         []RuleCondition
-	Channels           []uuid.UUID // AlertChannel IDs
-	EscalationPolicyID uuid.UUID
+	Channels           []string // AlertChannel IDs
+	EscalationPolicyID string
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
-	CreatedBy          uuid.UUID
-	UpdatedBy          uuid.UUID
+	CreatedBy          string
+	UpdatedBy          string
 }
 
 type RuleCondition struct {

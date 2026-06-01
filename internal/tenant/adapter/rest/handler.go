@@ -42,7 +42,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 // CreateTenant handles POST /api/v1/tenants
 func (h *Handler) CreateTenant(w http.ResponseWriter, r *http.Request) {
 	var req CreateTenantRequest
-	if err := server.ReadJSON(r, &req); err != nil {
+	if err := server.ReadJSON(w, r, &req); err != nil {
 		server.WriteJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid request body"})
 		return
 	}
@@ -116,7 +116,7 @@ func (h *Handler) GetTenant(w http.ResponseWriter, r *http.Request) {
 // CreateProduct handles POST /api/v1/products
 func (h *Handler) CreateProduct(w http.ResponseWriter, r *http.Request) {
 	var req CreateProductRequest
-	if err := server.ReadJSON(r, &req); err != nil {
+	if err := server.ReadJSON(w, r, &req); err != nil {
 		server.WriteJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid request body"})
 		return
 	}
@@ -175,7 +175,7 @@ func (h *Handler) ListProducts(w http.ResponseWriter, r *http.Request) {
 // CreateEnvironment handles POST /api/v1/environments
 func (h *Handler) CreateEnvironment(w http.ResponseWriter, r *http.Request) {
 	var req CreateEnvironmentRequest
-	if err := server.ReadJSON(r, &req); err != nil {
+	if err := server.ReadJSON(w, r, &req); err != nil {
 		server.WriteJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid request body"})
 		return
 	}
@@ -235,7 +235,7 @@ func (h *Handler) ListEnvironments(w http.ResponseWriter, r *http.Request) {
 // RegisterComponent handles POST /api/v1/components
 func (h *Handler) RegisterComponent(w http.ResponseWriter, r *http.Request) {
 	var req RegisterComponentRequest
-	if err := server.ReadJSON(r, &req); err != nil {
+	if err := server.ReadJSON(w, r, &req); err != nil {
 		server.WriteJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid request body"})
 		return
 	}

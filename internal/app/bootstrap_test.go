@@ -17,7 +17,7 @@ func TestBootstrap_RouterSetup(t *testing.T) {
 	cfg := config.LogConfig{Level: "info", Format: "json"}
 	log := logger.New(cfg)
 
-	router := server.NewRouter(log)
+	router := server.NewRouter(log, server.RouterConfig{})
 	router.HandleFunc("GET /test", func(w http.ResponseWriter, r *http.Request) {
 		server.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
@@ -50,7 +50,7 @@ func TestBootstrap_MiddlewareChainOrder(t *testing.T) {
 	cfg := config.LogConfig{Level: "error", Format: "json"}
 	log := logger.New(cfg)
 
-	router := server.NewRouter(log)
+	router := server.NewRouter(log, server.RouterConfig{})
 	router.HandleFunc("GET /ctx", func(w http.ResponseWriter, r *http.Request) {
 		// Verify context has IDs set by middleware
 		reqID := logger.RequestID(r.Context())
@@ -89,7 +89,7 @@ func TestBootstrap_PanicRecovery(t *testing.T) {
 	cfg := config.LogConfig{Level: "error", Format: "json"}
 	log := logger.New(cfg)
 
-	router := server.NewRouter(log)
+	router := server.NewRouter(log, server.RouterConfig{})
 	router.HandleFunc("GET /panic", func(w http.ResponseWriter, r *http.Request) {
 		panic("intentional test panic")
 	})
@@ -146,7 +146,7 @@ func TestBootstrap_CORSPreflight(t *testing.T) {
 	cfg := config.LogConfig{Level: "error", Format: "json"}
 	log := logger.New(cfg)
 
-	router := server.NewRouter(log)
+	router := server.NewRouter(log, server.RouterConfig{CORSOrigins: []string{"*"}})
 	router.HandleFunc("POST /api/v1/test", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
 	})
@@ -154,6 +154,7 @@ func TestBootstrap_CORSPreflight(t *testing.T) {
 	handler := router.Handler()
 
 	req := httptest.NewRequest(http.MethodOptions, "/api/v1/test", nil)
+	req.Header.Set("Origin", "http://example.com")
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)
@@ -161,7 +162,7 @@ func TestBootstrap_CORSPreflight(t *testing.T) {
 	if rec.Code != http.StatusNoContent {
 		t.Errorf("expected status 204 for OPTIONS, got %d", rec.Code)
 	}
-	if rec.Header().Get("Access-Control-Allow-Origin") != "*" {
+	if rec.Header().Get("Access-Control-Allow-Origin") == "" {
 		t.Error("expected CORS Allow-Origin header")
 	}
 }

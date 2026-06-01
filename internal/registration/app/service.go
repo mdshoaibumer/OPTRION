@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/optrion/optrion/internal/registration/domain"
 	"github.com/optrion/optrion/internal/registration/port"
 	tenantapp "github.com/optrion/optrion/internal/tenant/app"
-	tenantport "github.com/optrion/optrion/internal/tenant/port"
 )
 
 // RegistrationService orchestrates the registration workflow.
@@ -97,9 +97,10 @@ func (rs *RegistrationService) Register(ctx context.Context, req domain.Registra
 
 	// Create environment
 	envCmd := tenantapp.CreateEnvironmentCmd{
-		TenantID: tenant.ID,
+		TenantID:  tenant.ID,
 		ProductID: product.ID,
 		Name:      req.Environment.Name,
+		Slug:      slugFromName(req.Environment.Name),
 		Tier:      req.Environment.Tier,
 	}
 
@@ -181,4 +182,8 @@ func (rs *RegistrationService) ValidateAPIKey(ctx context.Context, apiKey string
 	}
 	// TODO: Implement proper API key validation
 	return "", nil
+}
+
+func slugFromName(name string) string {
+	return strings.ToLower(strings.ReplaceAll(strings.TrimSpace(name), " ", "-"))
 }

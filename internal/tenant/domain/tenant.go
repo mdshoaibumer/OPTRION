@@ -354,3 +354,13 @@ func NewAuditEvent(tenantID, actorID, action, entityType, entityID string, paylo
 		OccurredAt: time.Now().UTC(),
 	}
 }
+
+// HealthCheckResult represents the result of a component health check.
+type HealthCheckResult struct {
+	ID           string
+	TenantID     string
+	ComponentID  string
+	Status       string
+	ResponseTime time.Duration
+	CheckedAt    time.Time
+}

@@ -61,6 +61,7 @@ type ComponentRepository interface {
 	Create(ctx context.Context, comp *domain.Component) error
 	GetByID(ctx context.Context, id string) (*domain.Component, error)
 	ListByEnvironment(ctx context.Context, environmentID string, filter ComponentFilter) ([]*domain.Component, error)
+	ListByTenant(ctx context.Context, tenantID string) ([]*domain.Component, error)
 	Update(ctx context.Context, comp *domain.Component) error
 	ExistsBySlug(ctx context.Context, environmentID, slug string) (bool, error)
 }
@@ -87,4 +88,10 @@ type UnitOfWork interface {
 	Commit(ctx context.Context) error
 	// Rollback rolls back the transaction in the context.
 	Rollback(ctx context.Context) error
+}
+
+// HealthCheckRepository defines the persistence contract for health check results.
+type HealthCheckRepository interface {
+	GetLatestByComponent(ctx context.Context, componentID string) (*domain.HealthCheckResult, error)
+	ListByTenant(ctx context.Context, tenantID string, limit int) ([]*domain.HealthCheckResult, error)
 }

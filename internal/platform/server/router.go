@@ -5,17 +5,34 @@ import (
 	"net/http"
 )
 
+// RouterConfig holds configuration for the HTTP router.
+type RouterConfig struct {
+	CORSOrigins   []string
+	RateLimitRPS  int
+	AuthEnabled   bool
+	AuthValidator APIKeyValidator
+}
+
 // Router sets up all HTTP routes for the application.
 type Router struct {
-	mux    *http.ServeMux
-	logger *slog.Logger
+	mux         *http.ServeMux
+	logger      *slog.Logger
+	config      RouterConfig
+	rateLimiter RateLimiter
 }
 
 // NewRouter creates a new router with all middleware applied.
-func NewRouter(logger *slog.Logger) *Router {
+func NewRouter(logger *slog.Logger, cfg RouterConfig) *Router {
+	var limiter RateLimiter
+	if cfg.RateLimitRPS > 0 {
+		limiter = NewInMemoryRateLimiter(cfg.RateLimitRPS)
+	}
+
 	return &Router{
-		mux:    http.NewServeMux(),
-		logger: logger,
+		mux:         http.NewServeMux(),
+		logger:      logger,
+		config:      cfg,
+		rateLimiter: limiter,
 	}
 }
 
@@ -34,17 +51,34 @@ func (rt *Router) Mux() *http.ServeMux {
 	return rt.mux
 }
 
-// Handler returns the composed HTTP handler with middleware chain.
+// Handler returns the composed HTTP handler with the full middleware chain.
 func (rt *Router) Handler() http.Handler {
-	middleware := Chain(
+	middlewares := []Middleware{
 		SecurityHeaders(),
-		CORS(),
+		CORS(rt.config.CORSOrigins...),
 		Recovery(rt.logger),
 		CorrelationID(),
 		RequestID(),
 		Logging(rt.logger),
 		ContentType("application/json"),
-	)
+	}
 
-	return middleware(rt.mux)
+	// Add rate limiting if configured
+	if rt.rateLimiter != nil {
+		middlewares = append(middlewares, RateLimit(rt.rateLimiter, rt.logger))
+	}
+
+	return Chain(middlewares...)(rt.mux)
+}
+
+// AuthenticatedHandler wraps a handler with API key authentication and tenant isolation.
+// Use this for all tenant-scoped API endpoints.
+func (rt *Router) AuthenticatedHandler(handler http.Handler) http.Handler {
+	if !rt.config.AuthEnabled || rt.config.AuthValidator == nil {
+		return handler
+	}
+	return Chain(
+		APIKeyAuth(rt.config.AuthValidator, rt.logger),
+		TenantIsolation(rt.logger),
+	)(handler)
 }

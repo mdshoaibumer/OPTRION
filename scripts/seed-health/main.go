@@ -52,8 +52,24 @@ func main() {
 	}
 	fmt.Printf("✓ Found tenant: %s\n", tenantID)
 
-	// Get components
-	components := getComponents(baseURL, tenantID)
+	// Get components directly from database
+	rows, err := pool.Query(ctx, "SELECT id, name, kind FROM components WHERE tenant_id = $1", tenantID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: querying components: %v\n", err)
+		os.Exit(1)
+	}
+	defer rows.Close()
+
+	var components []component
+	for rows.Next() {
+		var c component
+		if err := rows.Scan(&c.ID, &c.Name, &c.Kind); err != nil {
+			fmt.Fprintf(os.Stderr, "ERROR: scanning component: %v\n", err)
+			os.Exit(1)
+		}
+		components = append(components, c)
+	}
+
 	if len(components) == 0 {
 		fmt.Fprintf(os.Stderr, "ERROR: no components found. Run scripts/seed/seed.go first.\n")
 		os.Exit(1)
@@ -86,17 +102,29 @@ type component struct {
 }
 
 func getTenantID(baseURL, slug string) string {
-	resp, err := http.Get(baseURL + "/api/v1/tenants/" + slug) //nolint:gosec
+	resp, err := http.Get(baseURL + "/api/v1/tenants") //nolint:gosec
 	if err != nil || resp.StatusCode != 200 {
 		return ""
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
 
-	var result map[string]interface{}
-	json.Unmarshal(body, &result) //nolint:errcheck
-	id, _ := result["id"].(string)
-	return id
+	var result struct {
+		Data []struct {
+			ID   string `json:"id"`
+			Slug string `json:"slug"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return ""
+	}
+
+	for _, t := range result.Data {
+		if t.Slug == slug {
+			return t.ID
+		}
+	}
+	return ""
 }
 
 func getComponents(baseURL, tenantID string) []component {
@@ -206,7 +234,7 @@ func seedServerComponent(ctx context.Context, pool *pgxpool.Pool, tenantID strin
 
 	_, err := pool.Exec(ctx, `
 		INSERT INTO components (id, tenant_id, product_id, environment_id, name, slug, kind, endpoint_url, created_at, updated_at)
-		SELECT $1, $2, p.id, e.id, 'OPTRION Server', 'optrion-server', 'server', 'localhost:8080', $3, $4
+		SELECT $1, $2, p.id, e.id, 'OPTRION Server', 'optrion-server', 'service', 'localhost:8080', $3, $4
 		FROM products p
 		JOIN environments e ON e.product_id = p.id
 		WHERE p.tenant_id = $2
@@ -256,18 +284,27 @@ func insertMetric(ctx context.Context, pool *pgxpool.Pool, tenantID, componentID
 	id := uuid.Must(uuid.NewV7()).String()
 	now := time.Now().UTC()
 
-	_, err := pool.Exec(ctx, `
-		INSERT INTO health_metrics (id, tenant_id, component_id, metric_type, collector_type, name, unit, warning_min, warning_max, critical_min, critical_max, enabled, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true, $12, $13)
+	thresholds := map[string]*float64{
+		"warning_min":  warnMin,
+		"warning_max":  warnMax,
+		"critical_min": critMin,
+		"critical_max": critMax,
+	}
+	thresholdsJSON, err := json.Marshal(thresholds)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "WARNING: failed to marshal thresholds for metric %s/%s: %v\n", componentID, metricType, err)
+		return
+	}
+
+	_, err = pool.Exec(ctx, `
+		INSERT INTO health_metrics (id, tenant_id, component_id, metric_type, collector_type, name, unit, thresholds, enabled, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, $9, $10)
 		ON CONFLICT (component_id, metric_type) DO UPDATE SET
 			name = EXCLUDED.name,
 			unit = EXCLUDED.unit,
-			warning_min = EXCLUDED.warning_min,
-			warning_max = EXCLUDED.warning_max,
-			critical_min = EXCLUDED.critical_min,
-			critical_max = EXCLUDED.critical_max,
+			thresholds = EXCLUDED.thresholds,
 			updated_at = EXCLUDED.updated_at
-	`, id, tenantID, componentID, metricType, collectorType, name, unit, warnMin, warnMax, critMin, critMax, now, now)
+	`, id, tenantID, componentID, metricType, collectorType, name, unit, thresholdsJSON, now, now)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "WARNING: failed to insert metric %s/%s: %v\n", componentID, metricType, err)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -21,6 +22,20 @@ func NewComponentHealthRepository(pool *pgxpool.Pool) *ComponentHealthRepository
 }
 
 func (r *ComponentHealthRepository) Upsert(ctx context.Context, status *domain.ComponentHealth) error {
+	if status.ID == "" {
+		status.ID = uuid.New().String()
+	}
+
+	if status.ComponentName == "" {
+		var componentName string
+		err := r.pool.QueryRow(ctx, "SELECT name FROM components WHERE id = $1", status.ComponentID).Scan(&componentName)
+		if err == nil {
+			status.ComponentName = componentName
+		} else {
+			status.ComponentName = "Unknown Component"
+		}
+	}
+
 	_, err := r.pool.Exec(ctx,
 		`INSERT INTO component_status (id, tenant_id, component_id, component_name, collector_type, status, score, last_check_at, updated_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)

@@ -2,7 +2,7 @@ package repository
 
 import (
 	"context"
-	"internal/recommendation/domain/recommendation"
+	"github.com/optrion/optrion/internal/recommendation/domain/recommendation"
 
 	"github.com/google/uuid"
 )

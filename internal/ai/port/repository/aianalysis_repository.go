@@ -2,7 +2,7 @@ package repository
 
 import (
 	"context"
-	"internal/ai/domain/aianalysis"
+	"github.com/optrion/optrion/internal/ai/domain/aianalysis"
 
 	"github.com/google/uuid"
 )

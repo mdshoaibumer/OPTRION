@@ -2,7 +2,7 @@ package repository
 
 import (
 	"context"
-	"internal/ai/domain/rootcausereport"
+	"github.com/optrion/optrion/internal/ai/domain/rootcausereport"
 
 	"github.com/google/uuid"
 )

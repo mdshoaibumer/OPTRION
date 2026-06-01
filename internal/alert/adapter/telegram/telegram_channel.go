@@ -3,9 +3,11 @@ package telegram
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"time"
 
@@ -32,6 +34,17 @@ func NewTelegramSender(rateLimit int, retryDelay time.Duration) *TelegramSender 
 	return &TelegramSender{
 		client: &http.Client{
 			Timeout: 10 * time.Second,
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					MinVersion: tls.VersionTLS12,
+				},
+				DialContext: (&net.Dialer{
+					Timeout: 5 * time.Second,
+				}).DialContext,
+				MaxIdleConns:        5,
+				IdleConnTimeout:     30 * time.Second,
+				TLSHandshakeTimeout: 5 * time.Second,
+			},
 		},
 		rateLimit:  rateLimit,
 		retryDelay: retryDelay,
@@ -92,7 +105,8 @@ func (ts *TelegramSender) sendMessage(ctx context.Context, botToken, chatID, tex
 
 	resp, err := ts.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("sending telegram message: %w", err)
+		// Sanitize error to avoid leaking bot token from URL
+		return fmt.Errorf("sending telegram message: connection failed")
 	}
 	defer resp.Body.Close()
 	io.Copy(io.Discard, resp.Body) //nolint:errcheck

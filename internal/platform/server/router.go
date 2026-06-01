@@ -7,10 +7,11 @@ import (
 
 // RouterConfig holds configuration for the HTTP router.
 type RouterConfig struct {
-	CORSOrigins   []string
-	RateLimitRPS  int
-	AuthEnabled   bool
-	AuthValidator APIKeyValidator
+	CORSOrigins    []string
+	RateLimitRPS   int
+	AuthEnabled    bool
+	AuthValidator  APIKeyValidator
+	TrustedProxies []string // IPs allowed to set X-Forwarded-For
 }
 
 // Router sets up all HTTP routes for the application.
@@ -26,6 +27,11 @@ func NewRouter(logger *slog.Logger, cfg RouterConfig) *Router {
 	var limiter RateLimiter
 	if cfg.RateLimitRPS > 0 {
 		limiter = NewInMemoryRateLimiter(cfg.RateLimitRPS)
+	}
+
+	// Configure trusted proxies for IP extraction security
+	if len(cfg.TrustedProxies) > 0 {
+		SetTrustedProxies(cfg.TrustedProxies)
 	}
 
 	return &Router{

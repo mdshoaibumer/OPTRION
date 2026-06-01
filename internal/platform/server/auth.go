@@ -6,11 +6,74 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"log/slog"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 )
+
+// TrustedProxies is a configurable list of trusted proxy IPs.
+// When set, X-Forwarded-For and X-Real-IP headers are only trusted
+// if the request originates from one of these IPs.
+// An empty list means all proxy headers are trusted (backwards-compatible default for dev).
+var TrustedProxies []string
+
+// SetTrustedProxies configures the list of trusted proxy IPs.
+func SetTrustedProxies(proxies []string) {
+	TrustedProxies = proxies
+}
+
+// ClientIP extracts the real client IP address from the request,
+// checking X-Forwarded-For and X-Real-IP headers before falling back to RemoteAddr.
+// Only trusts proxy headers if the request comes from a trusted proxy IP.
+// All header values are validated as parseable IP addresses.
+func ClientIP(r *http.Request) string {
+	// Extract the direct connection IP (cannot be spoofed)
+	remoteIP, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		remoteIP = r.RemoteAddr
+	}
+
+	// Only trust proxy headers if request came from a trusted proxy
+	if !isFromTrustedProxy(remoteIP) {
+		return remoteIP
+	}
+
+	// Check X-Forwarded-For header (comma-separated list; first is the client)
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.SplitN(xff, ",", 2)
+		ip := strings.TrimSpace(parts[0])
+		if ip != "" && net.ParseIP(ip) != nil {
+			return ip
+		}
+	}
+
+	// Check X-Real-IP header
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		ip := strings.TrimSpace(xri)
+		if ip != "" && net.ParseIP(ip) != nil {
+			return ip
+		}
+	}
+
+	// Fall back to RemoteAddr
+	return remoteIP
+}
+
+// isFromTrustedProxy checks if the given IP is in the trusted proxy list.
+// If no trusted proxies are configured, all proxy headers are trusted (dev mode).
+func isFromTrustedProxy(ip string) bool {
+	if len(TrustedProxies) == 0 {
+		return true // No restrictions in dev mode
+	}
+	for _, trusted := range TrustedProxies {
+		if ip == trusted {
+			return true
+		}
+	}
+	return false
+}
 
 // AuthFailureTracker tracks failed authentication attempts for brute-force protection.
 type AuthFailureTracker struct {
@@ -167,7 +230,7 @@ func APIKeyAuth(validator APIKeyValidator, logger *slog.Logger) Middleware {
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			clientIP := r.RemoteAddr
+			clientIP := ClientIP(r)
 
 			// Check if this IP is locked out due to too many failures
 			if failureTracker.IsLocked(clientIP) {

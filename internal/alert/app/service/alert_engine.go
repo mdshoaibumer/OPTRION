@@ -175,9 +175,7 @@ func (ae *AlertEngineImpl) getChannelsForRule(rule *alertrule.AlertRule, evt eve
 	}
 	channelIDs := rt.GetChannelsForSeverity(rule.Severity)
 	result := make([]string, len(channelIDs))
-	for i, ch := range channelIDs {
-		result[i] = ch
-	}
+	copy(result, channelIDs)
 	return result
 }
 

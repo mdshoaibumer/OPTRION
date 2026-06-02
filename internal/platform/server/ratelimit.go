@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"sync"
@@ -112,7 +111,7 @@ func RateLimit(limiter RateLimiter, logger *slog.Logger) Middleware {
 
 			if !allowed {
 				w.Header().Set("Retry-After", "1")
-				WriteError(w, http.StatusTooManyRequests, fmt.Sprintf("rate limit exceeded"))
+				WriteError(w, http.StatusTooManyRequests, "rate limit exceeded")
 				return
 			}
 

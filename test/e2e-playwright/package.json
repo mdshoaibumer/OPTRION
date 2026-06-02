@@ -1,0 +1,19 @@
+{
+  "name": "optrion-e2e-playwright",
+  "version": "1.0.0",
+  "description": "Playwright E2E tests for Optrion API and future UI",
+  "scripts": {
+    "server": "go run ./testserver",
+    "test": "npx playwright test --project=api",
+    "test:headed": "npx playwright test --headed",
+    "test:headless": "npx playwright test",
+    "test:api": "npx playwright test --project=api",
+    "test:ui": "npx playwright test --project=chromium --project=firefox --project=webkit",
+    "test:ui:headed": "npx playwright test --project=chromium --project=firefox --project=webkit --headed",
+    "test:debug": "npx playwright test --debug",
+    "report": "npx playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.45.0"
+  }
+}

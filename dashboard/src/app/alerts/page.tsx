@@ -60,7 +60,7 @@ export default function AlertsPage() {
             animate={{ opacity: 1, y: 0 }}
           >
             <h1 className="text-2xl font-bold">Alert Feed</h1>
-            <p className="text-sm text-[var(--muted)] mt-1">
+            <p className="text-sm text-muted mt-1">
               Real-time alert stream with severity filtering and delivery status
             </p>
           </motion.div>
@@ -70,7 +70,7 @@ export default function AlertsPage() {
             {["all", "critical", "major", "warning", "info"].map((filter) => (
               <button
                 key={filter}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium border border-[var(--card-border)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors capitalize"
+                className="px-3 py-1.5 rounded-lg text-xs font-medium border border-card-border hover:border-accent hover:text-accent transition-colors capitalize"
               >
                 {filter}
               </button>

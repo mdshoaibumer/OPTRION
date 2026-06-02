@@ -28,7 +28,7 @@ export default function TopologyPage() {
             animate={{ opacity: 1, y: 0 }}
           >
             <h1 className="text-2xl font-bold">Infrastructure Topology</h1>
-            <p className="text-sm text-[var(--muted)] mt-1">
+            <p className="text-sm text-muted mt-1">
               Component dependency graph with real-time health status
             </p>
           </motion.div>

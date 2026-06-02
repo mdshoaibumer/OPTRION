@@ -112,7 +112,7 @@ export default function DashboardPage() {
             transition={{ duration: 0.3 }}
           >
             <h1 className="text-2xl font-bold">Engineering Intelligence</h1>
-            <p className="text-sm text-[var(--muted)] mt-1">
+            <p className="text-sm text-muted mt-1">
               Real-time health monitoring and incident detection
             </p>
           </motion.div>
@@ -127,7 +127,7 @@ export default function DashboardPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
-              className="lg:col-span-1 rounded-xl border border-[var(--card-border)] bg-[var(--card)] p-6"
+              className="lg:col-span-1 rounded-xl border border-card-border bg-card p-6"
             >
               <h2 className="text-sm font-semibold mb-6">System Health</h2>
               <div className="flex flex-col items-center">
@@ -156,7 +156,7 @@ export default function DashboardPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
-              className="lg:col-span-1 rounded-xl border border-[var(--card-border)] bg-[var(--card)] p-6"
+              className="lg:col-span-1 rounded-xl border border-card-border bg-card p-6"
             >
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-sm font-semibold">Active Incidents</h2>
@@ -172,7 +172,7 @@ export default function DashboardPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
-              className="lg:col-span-1 rounded-xl border border-[var(--card-border)] bg-[var(--card)] p-6"
+              className="lg:col-span-1 rounded-xl border border-card-border bg-card p-6"
             >
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-sm font-semibold">Alert Feed</h2>

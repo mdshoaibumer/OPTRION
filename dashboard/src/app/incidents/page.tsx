@@ -48,7 +48,7 @@ export default function IncidentsPage() {
             className="mb-6"
           >
             <h1 className="text-2xl font-bold">Incident War Room</h1>
-            <p className="text-sm text-[var(--muted)] mt-1">
+            <p className="text-sm text-muted mt-1">
               Manage active incidents with AI-powered root cause analysis
             </p>
           </motion.div>
@@ -65,7 +65,7 @@ export default function IncidentsPage() {
 
             {/* Incident detail panel */}
             <motion.div
-              className="lg:col-span-3 rounded-xl border border-[var(--card-border)] bg-[var(--card)] p-6"
+              className="lg:col-span-3 rounded-xl border border-card-border bg-card p-6"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
             >
@@ -74,7 +74,7 @@ export default function IncidentsPage() {
                   {/* Header */}
                   <div>
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="text-xs font-mono text-[var(--muted)]">
+                      <span className="text-xs font-mono text-muted">
                         {selected.id}
                       </span>
                       <span className="text-xs uppercase px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">
@@ -82,14 +82,14 @@ export default function IncidentsPage() {
                       </span>
                     </div>
                     <h2 className="text-lg font-bold">{selected.title}</h2>
-                    <p className="text-sm text-[var(--muted)] mt-2">
+                    <p className="text-sm text-muted mt-2">
                       {selected.description}
                     </p>
                   </div>
 
                   {/* Timeline */}
                   <div>
-                    <h3 className="text-xs uppercase tracking-wider text-[var(--muted)] font-semibold mb-3">
+                    <h3 className="text-xs uppercase tracking-wider text-muted font-semibold mb-3">
                       Timeline
                     </h3>
                     <div className="space-y-3">
@@ -120,22 +120,22 @@ export default function IncidentsPage() {
 
                   {/* Actions */}
                   <div className="flex gap-3">
-                    <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--accent)] text-white text-sm font-medium hover:opacity-90 transition-opacity">
+                    <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:opacity-90 transition-opacity">
                       <Brain className="h-4 w-4" />
                       Run AI Analysis
                     </button>
-                    <button className="flex items-center gap-2 px-4 py-2 rounded-lg border border-[var(--card-border)] text-sm font-medium hover:bg-[var(--card-border)] transition-colors">
+                    <button className="flex items-center gap-2 px-4 py-2 rounded-lg border border-card-border text-sm font-medium hover:bg-card-border transition-colors">
                       <CheckCircle2 className="h-4 w-4" />
                       Acknowledge
                     </button>
-                    <button className="flex items-center gap-2 px-4 py-2 rounded-lg border border-[var(--card-border)] text-sm font-medium hover:bg-[var(--card-border)] transition-colors">
+                    <button className="flex items-center gap-2 px-4 py-2 rounded-lg border border-card-border text-sm font-medium hover:bg-card-border transition-colors">
                       <MessageSquare className="h-4 w-4" />
                       Comment
                     </button>
                   </div>
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center h-64 text-[var(--muted)]">
+                <div className="flex flex-col items-center justify-center h-64 text-muted">
                   <p className="text-sm">Select an incident to view details</p>
                 </div>
               )}
@@ -169,7 +169,7 @@ function TimelineEntry({
       <div className="flex-1">
         <span className="text-xs font-medium">{label}</span>
       </div>
-      <span className="text-xs text-[var(--muted)] font-mono">
+      <span className="text-xs text-muted font-mono">
         {new Date(time).toLocaleString()}
       </span>
     </div>

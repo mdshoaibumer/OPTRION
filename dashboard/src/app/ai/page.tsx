@@ -64,7 +64,7 @@ export default function AIPage() {
             animate={{ opacity: 1, y: 0 }}
           >
             <h1 className="text-2xl font-bold">AI Insights</h1>
-            <p className="text-sm text-[var(--muted)] mt-1">
+            <p className="text-sm text-muted mt-1">
               Root cause analysis and intelligent recommendations powered by AI
             </p>
           </motion.div>
@@ -77,23 +77,23 @@ export default function AIPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.1 }}
-                className="rounded-xl border border-[var(--card-border)] bg-[var(--card)] overflow-hidden"
+                className="rounded-xl border border-card-border bg-card overflow-hidden"
               >
                 {/* Header */}
-                <div className="px-6 py-4 border-b border-[var(--card-border)] flex items-center justify-between">
+                <div className="px-6 py-4 border-b border-card-border flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="rounded-lg p-2 bg-[var(--accent-glow)]">
-                      <Brain className="h-5 w-5 text-[var(--accent)]" />
+                    <div className="rounded-lg p-2 bg-(--accent-glow)">
+                      <Brain className="h-5 w-5 text-accent" />
                     </div>
                     <div>
                       <h3 className="text-sm font-semibold">{insight.incidentTitle}</h3>
-                      <span className="text-[10px] text-[var(--muted)] font-mono">
+                      <span className="text-[10px] text-muted font-mono">
                         {insight.incidentId}
                       </span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-[var(--muted)]">Confidence</span>
+                    <span className="text-xs text-muted">Confidence</span>
                     <span
                       className="text-sm font-bold font-mono"
                       style={{
@@ -109,22 +109,22 @@ export default function AIPage() {
                   {/* Root Cause */}
                   <div>
                     <div className="flex items-center gap-2 mb-3">
-                      <Target className="h-4 w-4 text-[var(--danger)]" />
-                      <h4 className="text-xs uppercase tracking-wider font-semibold text-[var(--muted)]">
+                      <Target className="h-4 w-4 text-danger" />
+                      <h4 className="text-xs uppercase tracking-wider font-semibold text-muted">
                         Root Cause
                       </h4>
                     </div>
                     <p className="text-sm leading-relaxed">{insight.rootCause}</p>
 
                     <div className="mt-4">
-                      <h4 className="text-xs uppercase tracking-wider font-semibold text-[var(--muted)] mb-2">
+                      <h4 className="text-xs uppercase tracking-wider font-semibold text-muted mb-2">
                         Affected Components
                       </h4>
                       <div className="flex flex-wrap gap-2">
                         {insight.affectedComponents.map((comp) => (
                           <span
                             key={comp}
-                            className="text-xs px-2 py-1 rounded-md bg-[var(--card-border)] text-[var(--foreground)]"
+                            className="text-xs px-2 py-1 rounded-md bg-card-border text-foreground"
                           >
                             {comp}
                           </span>
@@ -134,8 +134,8 @@ export default function AIPage() {
 
                     <div className="mt-4">
                       <div className="flex items-center gap-2 mb-2">
-                        <Lightbulb className="h-4 w-4 text-[var(--warning)]" />
-                        <h4 className="text-xs uppercase tracking-wider font-semibold text-[var(--muted)]">
+                        <Lightbulb className="h-4 w-4 text-warning" />
+                        <h4 className="text-xs uppercase tracking-wider font-semibold text-muted">
                           Investigation Hints
                         </h4>
                       </div>
@@ -143,9 +143,9 @@ export default function AIPage() {
                         {insight.hints.map((hint, i) => (
                           <li
                             key={i}
-                            className="text-xs text-[var(--muted)] flex items-start gap-2"
+                            className="text-xs text-muted flex items-start gap-2"
                           >
-                            <span className="text-[var(--accent)] mt-0.5">→</span>
+                            <span className="text-accent mt-0.5">→</span>
                             {hint}
                           </li>
                         ))}
@@ -156,8 +156,8 @@ export default function AIPage() {
                   {/* Recommendations */}
                   <div>
                     <div className="flex items-center gap-2 mb-3">
-                      <Zap className="h-4 w-4 text-[var(--accent)]" />
-                      <h4 className="text-xs uppercase tracking-wider font-semibold text-[var(--muted)]">
+                      <Zap className="h-4 w-4 text-accent" />
+                      <h4 className="text-xs uppercase tracking-wider font-semibold text-muted">
                         Recommendations
                       </h4>
                     </div>
@@ -165,7 +165,7 @@ export default function AIPage() {
                       {insight.recommendations.map((rec, i) => (
                         <div
                           key={i}
-                          className="rounded-lg border border-[var(--card-border)] p-3"
+                          className="rounded-lg border border-card-border p-3"
                         >
                           <div className="flex items-center justify-between">
                             <span className="text-sm font-medium">{rec.title}</span>
@@ -180,7 +180,7 @@ export default function AIPage() {
                             >
                               {rec.priority}
                             </span>
-                            <span className="text-[10px] text-[var(--muted)]">
+                            <span className="text-[10px] text-muted">
                               Risk: {rec.risk}
                             </span>
                           </div>

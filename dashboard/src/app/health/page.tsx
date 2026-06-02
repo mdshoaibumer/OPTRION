@@ -71,7 +71,7 @@ export default function HealthPage() {
             animate={{ opacity: 1, y: 0 }}
           >
             <h1 className="text-2xl font-bold">Health Scores</h1>
-            <p className="text-sm text-[var(--muted)] mt-1">
+            <p className="text-sm text-muted mt-1">
               Component-level health monitoring with metric breakdown
             </p>
           </motion.div>
@@ -84,13 +84,13 @@ export default function HealthPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.05 }}
-                className="rounded-xl border border-[var(--card-border)] bg-[var(--card)] p-5"
+                className="rounded-xl border border-card-border bg-card p-5"
               >
                 {/* Component header */}
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h3 className="text-sm font-semibold">{comp.name}</h3>
-                    <span className="text-[10px] uppercase tracking-wider text-[var(--muted)]">
+                    <span className="text-[10px] uppercase tracking-wider text-muted">
                       {comp.kind}
                     </span>
                   </div>
@@ -105,15 +105,15 @@ export default function HealthPage() {
                 {/* Trend indicator */}
                 <div className="flex items-center gap-1 mb-4">
                   {comp.trend === "up" && (
-                    <TrendingUp className="h-3.5 w-3.5 text-[var(--success)]" />
+                    <TrendingUp className="h-3.5 w-3.5 text-success" />
                   )}
                   {comp.trend === "down" && (
-                    <TrendingDown className="h-3.5 w-3.5 text-[var(--danger)]" />
+                    <TrendingDown className="h-3.5 w-3.5 text-danger" />
                   )}
                   {comp.trend === "stable" && (
-                    <Activity className="h-3.5 w-3.5 text-[var(--muted)]" />
+                    <Activity className="h-3.5 w-3.5 text-muted" />
                   )}
-                  <span className="text-[10px] text-[var(--muted)] capitalize">
+                  <span className="text-[10px] text-muted capitalize">
                     {comp.trend} trend
                   </span>
                 </div>
@@ -125,7 +125,7 @@ export default function HealthPage() {
                       key={metric.name}
                       className="flex items-center justify-between text-xs"
                     >
-                      <span className="text-[var(--muted)]">{metric.name}</span>
+                      <span className="text-muted">{metric.name}</span>
                       <span
                         className="font-mono font-medium"
                         style={{

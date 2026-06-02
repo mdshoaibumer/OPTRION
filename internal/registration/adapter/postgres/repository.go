@@ -35,7 +35,7 @@ func (r *RegistrationRepository) CreateAudit(ctx context.Context, audit *domain.
 	}
 
 	_, err = r.pool.Exec(ctx,
-		`INSERT INTO audit_events (id, tenant_id, action, entity_type, entity_id, payload, created_at)
+		`INSERT INTO audit_events (id, tenant_id, action, entity_type, entity_id, payload, occurred_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 		audit.ID, audit.TenantID, "registration."+audit.Status, "registration", audit.ID, payload, time.Now().UTC(),
 	)
@@ -48,7 +48,7 @@ func (r *RegistrationRepository) CreateAudit(ctx context.Context, audit *domain.
 // GetAuditByID retrieves a registration audit by ID.
 func (r *RegistrationRepository) GetAuditByID(ctx context.Context, auditID string) (*domain.RegistrationAudit, error) {
 	row := r.pool.QueryRow(ctx,
-		`SELECT id, tenant_id, action, payload, created_at
+		`SELECT id, tenant_id, action, payload, occurred_at
 		 FROM audit_events WHERE id = $1 AND entity_type = 'registration'`, auditID,
 	)
 
@@ -71,9 +71,9 @@ func (r *RegistrationRepository) GetAuditByID(ctx context.Context, auditID strin
 // ListAuditsByTenant retrieves all registration audits for a tenant.
 func (r *RegistrationRepository) ListAuditsByTenant(ctx context.Context, tenantID string) ([]*domain.RegistrationAudit, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, tenant_id, action, payload, created_at
+		`SELECT id, tenant_id, action, payload, occurred_at
 		 FROM audit_events WHERE tenant_id = $1 AND entity_type = 'registration'
-		 ORDER BY created_at DESC`, tenantID,
+		 ORDER BY occurred_at DESC`, tenantID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("querying registration audits: %w", err)

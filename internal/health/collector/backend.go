@@ -13,10 +13,15 @@ import (
 
 // BackendConfig holds configuration for backend monitoring.
 type BackendConfig struct {
-	TargetURL     string
-	Timeout       time.Duration
-	SkipSSRFCheck bool // Only set to true for internal/test collectors
+	TargetURL        string
+	Timeout          time.Duration
+	MaxResponseBytes int64 // Maximum response body size to read (default: 1MB)
+	SkipSSRFCheck    bool  // Only set to true for internal/test collectors
 }
+
+// defaultMaxResponseBytes is the maximum response body size (1MB).
+// Prevents memory exhaustion from malicious or misconfigured targets.
+const defaultMaxResponseBytes int64 = 1 * 1024 * 1024
 
 // BackendCollector monitors a backend HTTP service.
 type BackendCollector struct {
@@ -48,6 +53,25 @@ func NewBackendCollector(tenantID, componentID string, cfg BackendConfig) (*Back
 		config:      cfg,
 		client: &http.Client{
 			Timeout: cfg.Timeout,
+			Transport: &http.Transport{
+				MaxIdleConns:           10,
+				IdleConnTimeout:        30 * time.Second,
+				DisableKeepAlives:      true,
+				MaxResponseHeaderBytes: 256 * 1024, // 256KB max headers
+			},
+			// Prevent open redirects to internal resources (SSRF via redirect)
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				if len(via) >= 3 {
+					return fmt.Errorf("too many redirects")
+				}
+				// Validate redirect target against SSRF rules
+				if !cfg.SkipSSRFCheck {
+					if err := ValidateTargetURL(req.URL.String()); err != nil {
+						return fmt.Errorf("redirect blocked by SSRF protection: %w", err)
+					}
+				}
+				return nil
+			},
 		},
 		startTime: time.Now(),
 	}, nil
@@ -84,7 +108,14 @@ func (c *BackendCollector) Collect(ctx context.Context) (*port.CollectorResult, 
 		return result, nil
 	}
 	defer resp.Body.Close()
-	io.Copy(io.Discard, resp.Body) //nolint:errcheck
+
+	// Limit response body reads to prevent memory exhaustion from large/malicious responses
+	maxBytes := c.config.MaxResponseBytes
+	if maxBytes <= 0 {
+		maxBytes = defaultMaxResponseBytes
+	}
+	limitedReader := io.LimitReader(resp.Body, maxBytes)
+	io.Copy(io.Discard, limitedReader) //nolint:errcheck
 
 	// Availability: 1 = up, 0 = down
 	available := 1.0

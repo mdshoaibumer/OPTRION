@@ -122,6 +122,9 @@ func (h *RegistrationHandler) Register(w http.ResponseWriter, r *http.Request) {
 		} else if isValidationError(err) {
 			statusCode = http.StatusBadRequest
 			msg = err.Error()
+		} else if isConflictError(err) {
+			statusCode = http.StatusConflict
+			msg = err.Error()
 		}
 		server.WriteError(w, statusCode, msg)
 		return
@@ -147,4 +150,14 @@ func isValidationError(err error) bool {
 	return strings.Contains(msg, "invalid") ||
 		strings.Contains(msg, "required") ||
 		strings.Contains(msg, "registration")
+}
+
+// isConflictError checks if an error indicates a duplicate/conflict (unique constraint violation).
+func isConflictError(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, "duplicate") ||
+		strings.Contains(msg, "already exists") ||
+		strings.Contains(msg, "already taken") ||
+		strings.Contains(msg, "unique constraint") ||
+		strings.Contains(msg, "SQLSTATE 23505")
 }

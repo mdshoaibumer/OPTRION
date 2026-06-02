@@ -26,12 +26,29 @@ func NewAlertRulePostgresRepository(pool *pgxpool.Pool) *AlertRulePostgresReposi
 }
 
 func (r *AlertRulePostgresRepository) Create(ctx context.Context, rule *alertrule.AlertRule) error {
+	var escalationPolicyID interface{}
+	if rule.EscalationPolicyID != "" {
+		escalationPolicyID = rule.EscalationPolicyID
+	}
+	var createdBy, updatedBy interface{}
+	if rule.CreatedBy != "" {
+		createdBy = rule.CreatedBy
+	}
+	if rule.UpdatedBy != "" {
+		updatedBy = rule.UpdatedBy
+	}
+
+	conditionsJSON, _ := json.Marshal(rule.Conditions)
+	if rule.Conditions == nil {
+		conditionsJSON = []byte("[]")
+	}
+
 	_, err := r.pool.Exec(ctx,
-		`INSERT INTO alert_rules (id, tenant_id, name, description, severity, enabled, channels, escalation_policy_id, created_at, updated_at, created_by, updated_by)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+		`INSERT INTO alert_rules (id, tenant_id, name, description, severity, enabled, conditions, channels, escalation_policy_id, created_at, updated_at, created_by, updated_by)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
 		rule.ID, rule.TenantID, rule.Name, rule.Description, rule.Severity,
-		rule.Enabled, rule.Channels, rule.EscalationPolicyID,
-		rule.CreatedAt, rule.UpdatedAt, rule.CreatedBy, rule.UpdatedBy,
+		rule.Enabled, conditionsJSON, rule.Channels, escalationPolicyID,
+		rule.CreatedAt, rule.UpdatedAt, createdBy, updatedBy,
 	)
 	if err != nil {
 		return fmt.Errorf("inserting alert rule: %w", err)
@@ -63,15 +80,25 @@ func (r *AlertRulePostgresRepository) FindByID(ctx context.Context, id string) (
 	)
 
 	var rule alertrule.AlertRule
+	var escalationPolicyID, createdBy, updatedBy *string
 	err := row.Scan(&rule.ID, &rule.TenantID, &rule.Name, &rule.Description,
-		&rule.Severity, &rule.Enabled, &rule.Channels, &rule.EscalationPolicyID,
-		&rule.CreatedAt, &rule.UpdatedAt, &rule.CreatedBy, &rule.UpdatedBy,
+		&rule.Severity, &rule.Enabled, &rule.Channels, &escalationPolicyID,
+		&rule.CreatedAt, &rule.UpdatedAt, &createdBy, &updatedBy,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("querying alert rule: %w", err)
+	}
+	if escalationPolicyID != nil {
+		rule.EscalationPolicyID = *escalationPolicyID
+	}
+	if createdBy != nil {
+		rule.CreatedBy = *createdBy
+	}
+	if updatedBy != nil {
+		rule.UpdatedBy = *updatedBy
 	}
 	return &rule, nil
 }
@@ -89,12 +116,22 @@ func (r *AlertRulePostgresRepository) ListByTenant(ctx context.Context, tenantID
 	var rules []*alertrule.AlertRule
 	for rows.Next() {
 		var rule alertrule.AlertRule
+		var escalationPolicyID, createdBy, updatedBy *string
 		err := rows.Scan(&rule.ID, &rule.TenantID, &rule.Name, &rule.Description,
-			&rule.Severity, &rule.Enabled, &rule.Channels, &rule.EscalationPolicyID,
-			&rule.CreatedAt, &rule.UpdatedAt, &rule.CreatedBy, &rule.UpdatedBy,
+			&rule.Severity, &rule.Enabled, &rule.Channels, &escalationPolicyID,
+			&rule.CreatedAt, &rule.UpdatedAt, &createdBy, &updatedBy,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scanning alert rule: %w", err)
+		}
+		if escalationPolicyID != nil {
+			rule.EscalationPolicyID = *escalationPolicyID
+		}
+		if createdBy != nil {
+			rule.CreatedBy = *createdBy
+		}
+		if updatedBy != nil {
+			rule.UpdatedBy = *updatedBy
 		}
 		rules = append(rules, &rule)
 	}
@@ -114,12 +151,22 @@ func (r *AlertRulePostgresRepository) ListEnabledByTenant(ctx context.Context, t
 	var rules []*alertrule.AlertRule
 	for rows.Next() {
 		var rule alertrule.AlertRule
+		var escalationPolicyID, createdBy, updatedBy *string
 		err := rows.Scan(&rule.ID, &rule.TenantID, &rule.Name, &rule.Description,
-			&rule.Severity, &rule.Enabled, &rule.Channels, &rule.EscalationPolicyID,
-			&rule.CreatedAt, &rule.UpdatedAt, &rule.CreatedBy, &rule.UpdatedBy,
+			&rule.Severity, &rule.Enabled, &rule.Channels, &escalationPolicyID,
+			&rule.CreatedAt, &rule.UpdatedAt, &createdBy, &updatedBy,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scanning alert rule: %w", err)
+		}
+		if escalationPolicyID != nil {
+			rule.EscalationPolicyID = *escalationPolicyID
+		}
+		if createdBy != nil {
+			rule.CreatedBy = *createdBy
+		}
+		if updatedBy != nil {
+			rule.UpdatedBy = *updatedBy
 		}
 		rules = append(rules, &rule)
 	}

@@ -347,8 +347,8 @@ func TestListProductsHandler_MissingTenantID(t *testing.T) {
 
 	mux.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

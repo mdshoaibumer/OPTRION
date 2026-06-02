@@ -1,10 +1,10 @@
 package e2e
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"testing"
 	"time"
 
@@ -20,65 +20,11 @@ func TestE2E_HealthRegression(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. Setup tenant, product, environment, and component
-	tenantCmd := map[string]string{
-		"name": "Health GymFlow",
-		"slug": "health-gym-flow",
-		"plan": "free",
-	}
-	jsonBody, _ := json.Marshal(tenantCmd)
-	resp, err := env.Client.Post(env.Server.URL+"/api/v1/tenants", "application/json", bytes.NewBuffer(jsonBody))
-	if err != nil {
-		t.Fatalf("Failed to create tenant: %v", err)
-	}
-	var tenantData map[string]interface{}
-	_ = json.NewDecoder(resp.Body).Decode(&tenantData)
-	resp.Body.Close()
-	tenantID := tenantData["id"].(string)
+	tenantID, apiKey := createAuthenticatedTenant(t, env, "Health GymFlow", "health-gym-flow")
 
-	productCmd := map[string]string{
-		"tenant_id": tenantID,
-		"name":      "Backend",
-		"slug":      "backend",
-	}
-	jsonBody, _ = json.Marshal(productCmd)
-	resp, _ = env.Client.Post(env.Server.URL+"/api/v1/products", "application/json", bytes.NewBuffer(jsonBody))
-	resp.Body.Close()
-
-	resp, _ = env.Client.Get(env.Server.URL + "/api/v1/products?tenant_id=" + tenantID)
-	var productsList map[string]interface{}
-	_ = json.NewDecoder(resp.Body).Decode(&productsList)
-	resp.Body.Close()
-	productID := productsList["data"].([]interface{})[0].(map[string]interface{})["id"].(string)
-
-	envCmd := map[string]string{
-		"tenant_id":  tenantID,
-		"product_id": productID,
-		"name":       "Production",
-		"slug":       "production",
-		"tier":       "production",
-	}
-	jsonBody, _ = json.Marshal(envCmd)
-	resp, _ = env.Client.Post(env.Server.URL+"/api/v1/environments", "application/json", bytes.NewBuffer(jsonBody))
-	var envData map[string]interface{}
-	_ = json.NewDecoder(resp.Body).Decode(&envData)
-	resp.Body.Close()
-	envID := envData["id"].(string)
-
-	compCmd := map[string]string{
-		"tenant_id":      tenantID,
-		"product_id":     productID,
-		"environment_id": envID,
-		"name":           "Billing API",
-		"slug":           "billing-api",
-		"kind":           "api",
-		"endpoint_url":   "http://billing/health",
-	}
-	jsonBody, _ = json.Marshal(compCmd)
-	resp, _ = env.Client.Post(env.Server.URL+"/api/v1/components", "application/json", bytes.NewBuffer(jsonBody))
-	var compData map[string]interface{}
-	_ = json.NewDecoder(resp.Body).Decode(&compData)
-	resp.Body.Close()
-	componentID := compData["id"].(string)
+	productID := createProductAuth(t, env, tenantID, "Backend", "backend", apiKey)
+	envID := createEnvironmentAuth(t, env, tenantID, productID, "Production", "production", apiKey)
+	componentID := createComponentAuth(t, env, tenantID, productID, envID, "Billing API", "api", apiKey)
 
 	// 2. Define and seed health metrics configuration directly in PostgreSQL
 	// We'll create definition for availability, response_time, error_rate
@@ -103,7 +49,9 @@ func TestE2E_HealthRegression(t *testing.T) {
 
 	// Helper to get health score from API
 	getScore := func() int {
-		r, err := env.Client.Get(fmt.Sprintf("%s/api/v1/health/summary?tenant_id=%s", env.Server.URL, tenantID))
+		req, _ := http.NewRequest("GET", fmt.Sprintf("%s/api/v1/health/summary?tenant_id=%s", env.Server.URL, tenantID), nil)
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+		r, err := env.Client.Do(req)
 		if err != nil {
 			t.Fatalf("Failed to call health summary: %v", err)
 		}

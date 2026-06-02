@@ -13,20 +13,8 @@ func TestE2E_AlertRuleWorkflow(t *testing.T) {
 	env := testutil.SetupTestEnv(t)
 	defer env.Teardown(t)
 
-	// Create a tenant first
-	createTenant := map[string]string{"name": "Alert Test Tenant", "slug": "alert-test-tenant", "plan": "free"}
-	body, _ := json.Marshal(createTenant)
-	resp, err := env.Client.Post(env.Server.URL+"/api/v1/tenants", "application/json", bytes.NewBuffer(body))
-	if err != nil {
-		t.Fatalf("failed to create tenant: %v", err)
-	}
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("expected 201 for tenant creation, got %d", resp.StatusCode)
-	}
-	var tenantData map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&tenantData)
-	resp.Body.Close()
-	tenantID := tenantData["id"].(string)
+	// Create a tenant using registration (public endpoint, provides API key)
+	tenantID, apiKey := createAuthenticatedTenant(t, env, "Alert Test Tenant", "alert-test-tenant")
 
 	// Create an alert rule
 	createRule := map[string]interface{}{
@@ -37,8 +25,11 @@ func TestE2E_AlertRuleWorkflow(t *testing.T) {
 		"enabled":     true,
 		"channels":    []string{},
 	}
-	body, _ = json.Marshal(createRule)
-	resp, err = env.Client.Post(env.Server.URL+"/api/v1/alert-rules", "application/json", bytes.NewBuffer(body))
+	body, _ := json.Marshal(createRule)
+	req, _ := http.NewRequest("POST", env.Server.URL+"/api/v1/alert-rules", bytes.NewBuffer(body))
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := env.Client.Do(req)
 	if err != nil {
 		t.Fatalf("failed to create alert rule: %v", err)
 	}
@@ -62,7 +53,9 @@ func TestE2E_AlertRuleWorkflow(t *testing.T) {
 	}
 
 	// List alert rules for this tenant
-	resp, err = env.Client.Get(env.Server.URL + "/api/v1/alert-rules?tenant_id=" + tenantID)
+	req, _ = http.NewRequest("GET", env.Server.URL+"/api/v1/alert-rules?tenant_id="+tenantID, nil)
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	resp, err = env.Client.Do(req)
 	if err != nil {
 		t.Fatalf("failed to list alert rules: %v", err)
 	}
@@ -84,7 +77,10 @@ func TestE2E_AlertRuleWorkflow(t *testing.T) {
 		"enabled": true,
 	}
 	body, _ = json.Marshal(createChannel)
-	resp, err = env.Client.Post(env.Server.URL+"/api/v1/alert-channels", "application/json", bytes.NewBuffer(body))
+	req, _ = http.NewRequest("POST", env.Server.URL+"/api/v1/alert-channels", bytes.NewBuffer(body))
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = env.Client.Do(req)
 	if err != nil {
 		t.Fatalf("failed to create alert channel: %v", err)
 	}

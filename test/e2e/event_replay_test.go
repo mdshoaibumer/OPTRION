@@ -19,66 +19,12 @@ func TestE2E_EventReplay(t *testing.T) {
 
 	ctx := context.Background()
 
-	// 1. Setup tenant, product, environment, and component
-	tenantCmd := map[string]string{
-		"name": "Event Replay Tenant",
-		"slug": "event-replay",
-		"plan": "free",
-	}
-	jsonBody, _ := json.Marshal(tenantCmd)
-	resp, err := env.Client.Post(env.Server.URL+"/api/v1/tenants", "application/json", bytes.NewBuffer(jsonBody))
-	if err != nil {
-		t.Fatalf("Failed to create tenant: %v", err)
-	}
-	var tenantData map[string]interface{}
-	_ = json.NewDecoder(resp.Body).Decode(&tenantData)
-	resp.Body.Close()
-	tenantID := tenantData["id"].(string)
+	// 1. Setup tenant via registration endpoint (public, no auth needed)
+	tenantID, apiKey := createAuthenticatedTenant(t, env, "Event Replay Tenant", "event-replay")
 
-	productCmd := map[string]string{
-		"tenant_id": tenantID,
-		"name":      "App",
-		"slug":      "app",
-	}
-	jsonBody, _ = json.Marshal(productCmd)
-	resp, _ = env.Client.Post(env.Server.URL+"/api/v1/products", "application/json", bytes.NewBuffer(jsonBody))
-	resp.Body.Close()
-
-	resp, _ = env.Client.Get(env.Server.URL + "/api/v1/products?tenant_id=" + tenantID)
-	var productsList map[string]interface{}
-	_ = json.NewDecoder(resp.Body).Decode(&productsList)
-	resp.Body.Close()
-	productID := productsList["data"].([]interface{})[0].(map[string]interface{})["id"].(string)
-
-	envCmd := map[string]string{
-		"tenant_id":  tenantID,
-		"product_id": productID,
-		"name":       "Production",
-		"slug":       "production",
-		"tier":       "production",
-	}
-	jsonBody, _ = json.Marshal(envCmd)
-	resp, _ = env.Client.Post(env.Server.URL+"/api/v1/environments", "application/json", bytes.NewBuffer(jsonBody))
-	var envData map[string]interface{}
-	_ = json.NewDecoder(resp.Body).Decode(&envData)
-	resp.Body.Close()
-	envID := envData["id"].(string)
-
-	compCmd := map[string]string{
-		"tenant_id":      tenantID,
-		"product_id":     productID,
-		"environment_id": envID,
-		"name":           "Frontend Web",
-		"slug":           "frontend-web",
-		"kind":           "web",
-		"endpoint_url":   "http://web",
-	}
-	jsonBody, _ = json.Marshal(compCmd)
-	resp, _ = env.Client.Post(env.Server.URL+"/api/v1/components", "application/json", bytes.NewBuffer(jsonBody))
-	var compData map[string]interface{}
-	_ = json.NewDecoder(resp.Body).Decode(&compData)
-	resp.Body.Close()
-	componentID := compData["id"].(string)
+	productID := createProductAuth(t, env, tenantID, "App", "app", apiKey)
+	envID := createEnvironmentAuth(t, env, tenantID, productID, "Production", "production", apiKey)
+	componentID := createComponentAuth(t, env, tenantID, productID, envID, "frontend-web", "web", apiKey)
 
 	// 2. Generate an Incident directly so we can execute REST operations on it
 	inc, err := domain.NewIncident(tenantID, componentID, id.New(), "Frontend response latency high", "Description info", domain.SeverityWarning)
@@ -118,6 +64,7 @@ func TestE2E_EventReplay(t *testing.T) {
 		jsonReq, _ := json.Marshal(reqBody)
 		req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/api/v1/incidents/%s/%s", env.Server.URL, incidentID, action), bytes.NewBuffer(jsonReq))
 		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+apiKey)
 		r, err := env.Client.Do(req)
 		if err != nil {
 			t.Fatalf("Failed to execute REST API %s: %v", action, err)

@@ -57,30 +57,16 @@ func TestE2E_APIContract(t *testing.T) {
 		t.Fatalf("api info response missing required fields: %+v", info)
 	}
 
-	// Tenant lifecycle and list contract.
-	createTenant := map[string]string{"name": "Contract Tenant", "slug": "contract-tenant", "plan": "free"}
-	body, _ := json.Marshal(createTenant)
-	resp, err = env.Client.Post(env.Server.URL+"/api/v1/tenants", "application/json", bytes.NewBuffer(body))
-	if err != nil {
-		t.Fatalf("failed to create tenant: %v", err)
-	}
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("expected 201 Created for tenant creation, got %d", resp.StatusCode)
-	}
-	var tenantData map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&tenantData); err != nil {
-		t.Fatalf("failed to decode tenant create response: %v", err)
-	}
-	resp.Body.Close()
-	tenantID, ok := tenantData["id"].(string)
-	if !ok || tenantID == "" {
-		t.Fatalf("tenant create response missing id: %+v", tenantData)
-	}
+	// Tenant lifecycle and list contract — use registration endpoint (public, no auth).
+	tenantID, apiKey := createAuthenticatedTenant(t, env, "Contract Tenant", "contract-tenant")
 
 	// Create product and verify list contract.
 	createProduct := map[string]string{"tenant_id": tenantID, "name": "Contract Product", "slug": "contract-product"}
 	productBody, _ := json.Marshal(createProduct)
-	resp, err = env.Client.Post(env.Server.URL+"/api/v1/products", "application/json", bytes.NewBuffer(productBody))
+	req, _ := http.NewRequest("POST", env.Server.URL+"/api/v1/products", bytes.NewBuffer(productBody))
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = env.Client.Do(req)
 	if err != nil {
 		t.Fatalf("failed to create product: %v", err)
 	}
@@ -89,7 +75,9 @@ func TestE2E_APIContract(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	productListResp, err := env.Client.Get(env.Server.URL + fmt.Sprintf("/api/v1/products?tenant_id=%s", tenantID))
+	req, _ = http.NewRequest("GET", env.Server.URL+fmt.Sprintf("/api/v1/products?tenant_id=%s", tenantID), nil)
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	productListResp, err := env.Client.Do(req)
 	if err != nil {
 		t.Fatalf("failed to list products: %v", err)
 	}
@@ -101,15 +89,25 @@ func TestE2E_APIContract(t *testing.T) {
 	if err := json.NewDecoder(productListResp.Body).Decode(&products); err != nil {
 		t.Fatalf("failed to decode product list response: %v", err)
 	}
-	if products.Count != len(products.Data) || products.Count != 1 {
+	if products.Count != len(products.Data) || products.Count < 1 {
 		t.Fatalf("unexpected product list contract: %+v", products)
 	}
-	if products.Data[0]["slug"] != "contract-product" {
-		t.Fatalf("expected product slug contract-product, got %v", products.Data[0]["slug"])
+	// Registration creates a product automatically; verify our explicit product exists.
+	found := false
+	for _, p := range products.Data {
+		if p["slug"] == "contract-product" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected product slug contract-product in list, got %+v", products)
 	}
 
 	// Health summary contract should include overall_score and overall_status.
-	healthResp, err := env.Client.Get(env.Server.URL + fmt.Sprintf("/api/v1/health/summary?tenant_id=%s", tenantID))
+	req, _ = http.NewRequest("GET", env.Server.URL+fmt.Sprintf("/api/v1/health/summary?tenant_id=%s", tenantID), nil)
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	healthResp, err := env.Client.Do(req)
 	if err != nil {
 		t.Fatalf("failed to query health summary: %v", err)
 	}

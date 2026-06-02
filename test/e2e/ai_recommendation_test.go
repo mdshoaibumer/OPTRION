@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/optrion/optrion/test/testutil"
@@ -343,7 +344,7 @@ func createEnvironmentAuth(t *testing.T, env *testutil.TestEnv, tenantID, produc
 		"tenant_id":  tenantID,
 		"product_id": productID,
 		"name":       name,
-		"slug":       name + "-env",
+		"slug":       strings.ReplaceAll(strings.ToLower(name), " ", "-") + "-env",
 		"tier":       tier,
 	})
 	req, _ := http.NewRequest("POST", env.Server.URL+"/api/v1/environments", bytes.NewBuffer(body))
@@ -371,7 +372,7 @@ func createComponentAuth(t *testing.T, env *testutil.TestEnv, tenantID, productI
 		"product_id":     productID,
 		"environment_id": envID,
 		"name":           name,
-		"slug":           name + "-comp",
+		"slug":           strings.ReplaceAll(strings.ToLower(name), " ", "-") + "-comp",
 		"kind":           kind,
 	})
 	req, _ := http.NewRequest("POST", env.Server.URL+"/api/v1/components", bytes.NewBuffer(body))

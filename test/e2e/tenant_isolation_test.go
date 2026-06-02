@@ -14,41 +14,22 @@ func TestE2E_TenantIsolation(t *testing.T) {
 	env := testutil.SetupTestEnv(t)
 	defer env.Teardown(t)
 
-	// Helper to create tenant
-	createTenant := func(name, slug string) string {
-		body := map[string]string{
-			"name": name,
-			"slug": slug,
-			"plan": "free",
-		}
-		jsonBody, _ := json.Marshal(body)
-		resp, err := env.Client.Post(env.Server.URL+"/api/v1/tenants", "application/json", bytes.NewBuffer(jsonBody))
-		if err != nil {
-			t.Fatalf("Failed to create tenant: %v", err)
-		}
-		defer resp.Body.Close()
+	// Create two separate tenants with their own API keys
+	tenantAID, apiKeyA := createAuthenticatedTenant(t, env, "Tenant A", "tenant-a")
+	tenantBID, apiKeyB := createAuthenticatedTenant(t, env, "Tenant B", "tenant-b")
 
-		if resp.StatusCode != http.StatusCreated {
-			t.Fatalf("Expected 201 Created, got %d", resp.StatusCode)
-		}
-
-		var respData map[string]interface{}
-		_ = json.NewDecoder(resp.Body).Decode(&respData)
-		return respData["id"].(string)
-	}
-
-	tenantAID := createTenant("Tenant A", "tenant-a")
-	tenantBID := createTenant("Tenant B", "tenant-b")
-
-	// Helper to create product
-	createProduct := func(tenantID, name, slug string, expectStatus int) string {
+	// Helper to create product with auth
+	createProduct := func(tenantID, name, slug, apiKey string, expectStatus int) string {
 		body := map[string]string{
 			"tenant_id": tenantID,
 			"name":      name,
 			"slug":      slug,
 		}
 		jsonBody, _ := json.Marshal(body)
-		resp, err := env.Client.Post(env.Server.URL+"/api/v1/products", "application/json", bytes.NewBuffer(jsonBody))
+		req, _ := http.NewRequest("POST", env.Server.URL+"/api/v1/products", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := env.Client.Do(req)
 		if err != nil {
 			t.Fatalf("Failed to create product: %v", err)
 		}
@@ -67,16 +48,13 @@ func TestE2E_TenantIsolation(t *testing.T) {
 	}
 
 	// 1. Tenant A creates Product A
-	productAID := createProduct(tenantAID, "Product A", "product-a", http.StatusCreated)
+	productAID := createProduct(tenantAID, "Product A", "product-a", apiKeyA, http.StatusCreated)
 
-	// 2. Tenant B tries to create a product under Tenant A's ID
-	// Since Tenant B is doing this, we verify that the service checks tenant validity
-	// If Tenant B passes Tenant A's ID, it succeeds for Tenant A, but if they try to access/link cross-tenant:
 	// Let's create a product for Tenant B:
-	productBID := createProduct(tenantBID, "Product B", "product-b", http.StatusCreated)
+	productBID := createProduct(tenantBID, "Product B", "product-b", apiKeyB, http.StatusCreated)
 
-	// Helper to create environment
-	createEnv := func(tenantID, productID, name, slug string, expectStatus int) string {
+	// Helper to create environment with auth
+	createEnv := func(tenantID, productID, name, slug, apiKey string, expectStatus int) string {
 		body := map[string]string{
 			"tenant_id":  tenantID,
 			"product_id": productID,
@@ -85,7 +63,10 @@ func TestE2E_TenantIsolation(t *testing.T) {
 			"tier":       "production",
 		}
 		jsonBody, _ := json.Marshal(body)
-		resp, err := env.Client.Post(env.Server.URL+"/api/v1/environments", "application/json", bytes.NewBuffer(jsonBody))
+		req, _ := http.NewRequest("POST", env.Server.URL+"/api/v1/environments", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := env.Client.Do(req)
 		if err != nil {
 			t.Fatalf("Failed to create environment: %v", err)
 		}
@@ -105,15 +86,15 @@ func TestE2E_TenantIsolation(t *testing.T) {
 
 	// 3. Tenant B tries to create an environment under Tenant A's Product A (Cross-tenant mapping)
 	// Should fail with 404 (product not found under Tenant B)
-	createEnv(tenantBID, productAID, "Env B", "env-b", http.StatusNotFound)
+	createEnv(tenantBID, productAID, "Env B", "env-b", apiKeyB, http.StatusNotFound)
 
 	// Tenant A creates Environment A under Product A (succeeds)
-	envAID := createEnv(tenantAID, productAID, "Env A", "env-a", http.StatusCreated)
+	envAID := createEnv(tenantAID, productAID, "Env A", "env-a", apiKeyA, http.StatusCreated)
 	// Tenant B creates Environment B under Product B (succeeds)
-	_ = createEnv(tenantBID, productBID, "Env B", "env-b", http.StatusCreated)
+	_ = createEnv(tenantBID, productBID, "Env B", "env-b", apiKeyB, http.StatusCreated)
 
-	// Helper to register component
-	registerComponent := func(tenantID, productID, envID, name, slug, kind string, expectStatus int) string {
+	// Helper to register component with auth
+	registerComponent := func(tenantID, productID, envID, name, slug, kind, apiKey string, expectStatus int) string {
 		body := map[string]string{
 			"tenant_id":      tenantID,
 			"product_id":     productID,
@@ -124,7 +105,10 @@ func TestE2E_TenantIsolation(t *testing.T) {
 			"endpoint_url":   "http://localhost/health",
 		}
 		jsonBody, _ := json.Marshal(body)
-		resp, err := env.Client.Post(env.Server.URL+"/api/v1/components", "application/json", bytes.NewBuffer(jsonBody))
+		req, _ := http.NewRequest("POST", env.Server.URL+"/api/v1/components", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := env.Client.Do(req)
 		if err != nil {
 			t.Fatalf("Failed to register component: %v", err)
 		}
@@ -144,14 +128,16 @@ func TestE2E_TenantIsolation(t *testing.T) {
 
 	// 4. Tenant B tries to register Component B under Tenant A's Environment A (Cross-tenant mapping)
 	// Should fail with 404 (environment not found under Product B / Tenant B)
-	registerComponent(tenantBID, productBID, envAID, "Comp B", "comp-b", "database", http.StatusNotFound)
+	registerComponent(tenantBID, productBID, envAID, "Comp B", "comp-b", "database", apiKeyB, http.StatusNotFound)
 
 	// Tenant A registers Component A under Environment A (succeeds)
-	registerComponent(tenantAID, productAID, envAID, "Comp A", "comp-a", "database", http.StatusCreated)
+	registerComponent(tenantAID, productAID, envAID, "Comp A", "comp-a", "database", apiKeyA, http.StatusCreated)
 
 	// 5. Verify product listing isolation
-	listProducts := func(tenantID string) []string {
-		resp, err := env.Client.Get(fmt.Sprintf("%s/api/v1/products?tenant_id=%s", env.Server.URL, tenantID))
+	listProducts := func(tenantID, apiKey string) []string {
+		req, _ := http.NewRequest("GET", fmt.Sprintf("%s/api/v1/products?tenant_id=%s", env.Server.URL, tenantID), nil)
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+		resp, err := env.Client.Do(req)
 		if err != nil {
 			t.Fatalf("Failed to list products: %v", err)
 		}
@@ -168,14 +154,31 @@ func TestE2E_TenantIsolation(t *testing.T) {
 		return slugs
 	}
 
-	aProducts := listProducts(tenantAID)
-	bProducts := listProducts(tenantBID)
+	aProducts := listProducts(tenantAID, apiKeyA)
+	bProducts := listProducts(tenantBID, apiKeyB)
 
-	if len(aProducts) != 1 || aProducts[0] != "product-a" {
-		t.Errorf("Expected Tenant A to have exactly 'product-a', got: %v", aProducts)
+	// Registration creates a product automatically, so each tenant has 2 products.
+	// The key isolation check: products from A should NOT appear in B's list and vice versa.
+	hasSlug := func(slugs []string, target string) bool {
+		for _, s := range slugs {
+			if s == target {
+				return true
+			}
+		}
+		return false
 	}
 
-	if len(bProducts) != 1 || bProducts[0] != "product-b" {
-		t.Errorf("Expected Tenant B to have exactly 'product-b', got: %v", bProducts)
+	if !hasSlug(aProducts, "product-a") {
+		t.Errorf("Expected Tenant A products to contain 'product-a', got: %v", aProducts)
+	}
+	if hasSlug(aProducts, "product-b") {
+		t.Errorf("Tenant A should NOT see Tenant B's 'product-b', got: %v", aProducts)
+	}
+
+	if !hasSlug(bProducts, "product-b") {
+		t.Errorf("Expected Tenant B products to contain 'product-b', got: %v", bProducts)
+	}
+	if hasSlug(bProducts, "product-a") {
+		t.Errorf("Tenant B should NOT see Tenant A's 'product-a', got: %v", bProducts)
 	}
 }

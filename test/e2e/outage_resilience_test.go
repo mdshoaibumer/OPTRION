@@ -3,6 +3,7 @@ package e2e
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 	"os/exec"
 	"testing"
 	"time"
@@ -23,6 +24,10 @@ func runDockerCommand(t *testing.T, action, container string) {
 }
 
 func TestE2E_OutageResilience(t *testing.T) {
+	if os.Getenv("SKIP_DOCKER") == "true" {
+		t.Skip("Skipping outage resilience test — requires Docker")
+	}
+
 	env := testutil.SetupTestEnv(t)
 	defer env.Teardown(t)
 

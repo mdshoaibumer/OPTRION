@@ -20,78 +20,11 @@ func TestE2E_IncidentDeduplication(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. Onboard tenant, product, env, component
-	tenantCmd := map[string]string{
-		"name": "GymFlow Deduplication",
-		"slug": "gym-flow-dedup",
-		"plan": "free",
-	}
-	jsonBody, _ := json.Marshal(tenantCmd)
-	resp, err := env.Client.Post(env.Server.URL+"/api/v1/tenants", "application/json", bytes.NewBuffer(jsonBody))
-	if err != nil {
-		t.Fatalf("Failed to create tenant: %v", err)
-	}
-	defer resp.Body.Close()
+	tenantID, apiKey := createAuthenticatedTenant(t, env, "GymFlow Deduplication", "gym-flow-dedup")
 
-	var tenantData map[string]interface{}
-	_ = json.NewDecoder(resp.Body).Decode(&tenantData)
-	tenantID := tenantData["id"].(string)
-
-	productCmd := map[string]string{
-		"tenant_id": tenantID,
-		"name":      "Deduplication API",
-		"slug":      "dedup-api",
-	}
-	jsonBody, _ = json.Marshal(productCmd)
-	resp, err = env.Client.Post(env.Server.URL+"/api/v1/products", "application/json", bytes.NewBuffer(jsonBody))
-	if err != nil {
-		t.Fatalf("Failed to create product: %v", err)
-	}
-	resp.Body.Close()
-
-	var productData map[string]interface{}
-	_ = json.Unmarshal(jsonBody, &productData) // wait, no, let's get the ID
-	// Let's list products for this tenant to get product ID
-	resp, _ = env.Client.Get(env.Server.URL + "/api/v1/products?tenant_id=" + tenantID)
-	var productsList map[string]interface{}
-	_ = json.NewDecoder(resp.Body).Decode(&productsList)
-	resp.Body.Close()
-	productID := productsList["data"].([]interface{})[0].(map[string]interface{})["id"].(string)
-
-	envCmd := map[string]string{
-		"tenant_id":  tenantID,
-		"product_id": productID,
-		"name":       "Production",
-		"slug":       "production",
-		"tier":       "production",
-	}
-	jsonBody, _ = json.Marshal(envCmd)
-	resp, err = env.Client.Post(env.Server.URL+"/api/v1/environments", "application/json", bytes.NewBuffer(jsonBody))
-	if err != nil {
-		t.Fatalf("Failed to create env: %v", err)
-	}
-	defer resp.Body.Close()
-	var envData map[string]interface{}
-	_ = json.NewDecoder(resp.Body).Decode(&envData)
-	envID := envData["id"].(string)
-
-	compCmd := map[string]string{
-		"tenant_id":      tenantID,
-		"product_id":     productID,
-		"environment_id": envID,
-		"name":           "PostgreSQL Main",
-		"slug":           "postgres-main",
-		"kind":           "database",
-		"endpoint_url":   "postgres://localhost",
-	}
-	jsonBody, _ = json.Marshal(compCmd)
-	resp, err = env.Client.Post(env.Server.URL+"/api/v1/components", "application/json", bytes.NewBuffer(jsonBody))
-	if err != nil {
-		t.Fatalf("Failed to register component: %v", err)
-	}
-	defer resp.Body.Close()
-	var compData map[string]interface{}
-	_ = json.NewDecoder(resp.Body).Decode(&compData)
-	componentID := compData["id"].(string)
+	productID := createProductAuth(t, env, tenantID, "Deduplication API", "dedup-api", apiKey)
+	envID := createEnvironmentAuth(t, env, tenantID, productID, "Production", "production", apiKey)
+	componentID := createComponentAuth(t, env, tenantID, productID, envID, "PostgreSQL Main", "database", apiKey)
 
 	// 2. Register an incident rule directly using IncidentService / Postgres repos
 	rule, err := domain.NewIncidentRule(
@@ -146,7 +79,9 @@ func TestE2E_IncidentDeduplication(t *testing.T) {
 
 	// Fetch incidents via REST API
 	listIncidents := func() []map[string]interface{} {
-		r, err := env.Client.Get(fmt.Sprintf("%s/api/v1/incidents?tenant_id=%s", env.Server.URL, tenantID))
+		req, _ := http.NewRequest("GET", fmt.Sprintf("%s/api/v1/incidents?tenant_id=%s", env.Server.URL, tenantID), nil)
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+		r, err := env.Client.Do(req)
 		if err != nil {
 			t.Fatalf("Failed to list incidents: %v", err)
 		}
@@ -193,9 +128,10 @@ func TestE2E_IncidentDeduplication(t *testing.T) {
 	// Verify correlation: Acknowledge the incident first
 	ackBody := map[string]string{"actor_id": "test-user"}
 	ackJson, _ := json.Marshal(ackBody)
-	req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/api/v1/incidents/%s/acknowledge", env.Server.URL, firstIncidentID), bytes.NewBuffer(ackJson))
-	req.Header.Set("Content-Type", "application/json")
-	ackResp, err := env.Client.Do(req)
+	ackReq, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/api/v1/incidents/%s/acknowledge", env.Server.URL, firstIncidentID), bytes.NewBuffer(ackJson))
+	ackReq.Header.Set("Authorization", "Bearer "+apiKey)
+	ackReq.Header.Set("Content-Type", "application/json")
+	ackResp, err := env.Client.Do(ackReq)
 	if err != nil {
 		t.Fatalf("Failed to acknowledge incident: %v", err)
 	}

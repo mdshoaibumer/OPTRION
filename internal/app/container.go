@@ -29,6 +29,7 @@ import (
 	incidentrest "github.com/optrion/optrion/internal/incident/adapter/rest"
 	incidentapp "github.com/optrion/optrion/internal/incident/app"
 	"github.com/optrion/optrion/internal/platform/cache"
+	"github.com/optrion/optrion/internal/platform/circuitbreaker"
 	"github.com/optrion/optrion/internal/platform/config"
 	"github.com/optrion/optrion/internal/platform/database"
 	"github.com/optrion/optrion/internal/platform/eventbus"
@@ -207,17 +208,23 @@ func NewContainer(ctx context.Context) (*Container, error) {
 		var aiProvider provider.AIProvider
 		switch cfg.AI.Provider {
 		case "gemini":
-			aiProvider = provider.NewGeminiProvider(provider.GeminiConfig{
-				APIKey:    cfg.AI.APIKey,
-				Model:     cfg.AI.Model,
-				MaxTokens: cfg.AI.MaxTokens,
-			})
+			aiProvider = provider.NewResilientProvider(
+				provider.NewGeminiProvider(provider.GeminiConfig{
+					APIKey:    cfg.AI.APIKey,
+					Model:     cfg.AI.Model,
+					MaxTokens: cfg.AI.MaxTokens,
+				}),
+				circuitbreaker.DefaultConfig(),
+			)
 		default:
-			aiProvider = provider.NewGeminiProvider(provider.GeminiConfig{
-				APIKey:    cfg.AI.APIKey,
-				Model:     cfg.AI.Model,
-				MaxTokens: cfg.AI.MaxTokens,
-			})
+			aiProvider = provider.NewResilientProvider(
+				provider.NewGeminiProvider(provider.GeminiConfig{
+					APIKey:    cfg.AI.APIKey,
+					Model:     cfg.AI.Model,
+					MaxTokens: cfg.AI.MaxTokens,
+				}),
+				circuitbreaker.DefaultConfig(),
+			)
 		}
 
 		aiAnalysisRepo := aipg.NewAIAnalysisRepository(pool)

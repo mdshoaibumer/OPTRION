@@ -144,8 +144,15 @@ func (h *Handler) CreateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Auto-inject tenant_id from auth context — never trust client-supplied tenant_id
+	tenantID := server.TenantIDFromContext(r.Context())
+	if tenantID == "" {
+		server.WriteJSON(w, http.StatusUnauthorized, ErrorResponse{Error: "authentication required"})
+		return
+	}
+
 	product, err := h.service.CreateProduct(r.Context(), app.CreateProductCmd{
-		TenantID:    req.TenantID,
+		TenantID:    tenantID,
 		Name:        req.Name,
 		Slug:        req.Slug,
 		Description: req.Description,
@@ -158,11 +165,12 @@ func (h *Handler) CreateProduct(w http.ResponseWriter, r *http.Request) {
 	server.WriteJSON(w, http.StatusCreated, toProductResponse(product))
 }
 
-// ListProducts handles GET /api/v1/products?tenant_id=...
+// ListProducts handles GET /api/v1/products
 func (h *Handler) ListProducts(w http.ResponseWriter, r *http.Request) {
-	tenantID := r.URL.Query().Get("tenant_id")
+	// Auto-inject tenant_id from authenticated context (eliminates cross-tenant leakage)
+	tenantID := server.TenantIDFromContext(r.Context())
 	if tenantID == "" {
-		server.WriteJSON(w, http.StatusBadRequest, ErrorResponse{Error: "tenant_id query parameter is required"})
+		server.WriteJSON(w, http.StatusUnauthorized, ErrorResponse{Error: "authentication required"})
 		return
 	}
 
@@ -203,8 +211,15 @@ func (h *Handler) CreateEnvironment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Auto-inject tenant_id from auth context
+	tenantID := server.TenantIDFromContext(r.Context())
+	if tenantID == "" {
+		server.WriteJSON(w, http.StatusUnauthorized, ErrorResponse{Error: "authentication required"})
+		return
+	}
+
 	env, err := h.service.CreateEnvironment(r.Context(), app.CreateEnvironmentCmd{
-		TenantID:  req.TenantID,
+		TenantID:  tenantID,
 		ProductID: req.ProductID,
 		Name:      req.Name,
 		Slug:      req.Slug,
@@ -263,8 +278,15 @@ func (h *Handler) RegisterComponent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Auto-inject tenant_id from auth context
+	tenantID := server.TenantIDFromContext(r.Context())
+	if tenantID == "" {
+		server.WriteJSON(w, http.StatusUnauthorized, ErrorResponse{Error: "authentication required"})
+		return
+	}
+
 	comp, err := h.service.RegisterComponent(r.Context(), app.RegisterComponentCmd{
-		TenantID:      req.TenantID,
+		TenantID:      tenantID,
 		ProductID:     req.ProductID,
 		EnvironmentID: req.EnvironmentID,
 		Name:          req.Name,

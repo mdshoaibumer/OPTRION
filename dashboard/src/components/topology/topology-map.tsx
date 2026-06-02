@@ -33,7 +33,7 @@ export function TopologyMap({ components, onNodeClick }: TopologyMapProps) {
   const sortedGroups = kindOrder.filter((k) => grouped[k]);
 
   return (
-    <div className="relative w-full min-h-[400px] bg-[var(--card)] rounded-2xl border border-[var(--card-border)] p-8 overflow-hidden">
+    <div className="relative w-full min-h-100 bg-card rounded-2xl border border-card-border p-8 overflow-hidden">
       {/* Background grid */}
       <div
         className="absolute inset-0 opacity-5"
@@ -77,7 +77,7 @@ export function TopologyMap({ components, onNodeClick }: TopologyMapProps) {
         <AnimatePresence mode="popLayout">
           {sortedGroups.map((kind, groupIdx) => (
             <div key={kind} className="mb-8">
-              <h3 className="text-xs uppercase tracking-wider text-[var(--muted)] mb-4 font-semibold">
+              <h3 className="text-xs uppercase tracking-wider text-muted mb-4 font-semibold">
                 {kind}
               </h3>
               <div className="flex flex-wrap gap-4">
@@ -101,7 +101,7 @@ export function TopologyMap({ components, onNodeClick }: TopologyMapProps) {
 
       {/* Empty state */}
       {components.length === 0 && (
-        <div className="flex flex-col items-center justify-center h-64 text-[var(--muted)]">
+        <div className="flex flex-col items-center justify-center h-64 text-muted">
           <p className="text-sm">No components registered</p>
           <p className="text-xs mt-1">Register components via the CLI or API</p>
         </div>

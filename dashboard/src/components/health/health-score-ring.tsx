@@ -85,7 +85,7 @@ export function HealthScoreRing({
         </motion.span>
       </div>
       {label && (
-        <span className={cn("mt-1 text-[var(--muted)]", labelSize)}>{label}</span>
+        <span className={cn("mt-1 text-muted", labelSize)}>{label}</span>
       )}
     </div>
   );

@@ -62,10 +62,10 @@ export function IncidentList({ incidents, onSelect, selectedId }: IncidentListPr
               onClick={() => onSelect?.(incident)}
               className={cn(
                 "group cursor-pointer rounded-xl border p-4 transition-all duration-200",
-                "hover:border-[var(--accent)]/40 hover:bg-[var(--card)]",
+                "hover:border-accent/40 hover:bg-card",
                 isSelected
-                  ? "border-[var(--accent)] bg-[var(--accent-glow)]"
-                  : "border-[var(--card-border)] bg-[var(--card)]/50"
+                  ? "border-accent bg-(--accent-glow)"
+                  : "border-card-border bg-card/50"
               )}
             >
               <div className="flex items-start gap-3">
@@ -95,7 +95,7 @@ export function IncidentList({ incidents, onSelect, selectedId }: IncidentListPr
                       {status.label}
                     </span>
                   </div>
-                  <div className="flex items-center gap-3 mt-1.5 text-xs text-[var(--muted)]">
+                  <div className="flex items-center gap-3 mt-1.5 text-xs text-muted">
                     <span className="flex items-center gap-1">
                       <Clock className="h-3 w-3" />
                       <RelativeTime date={incident.occurred_at} />
@@ -108,8 +108,8 @@ export function IncidentList({ incidents, onSelect, selectedId }: IncidentListPr
 
                 {/* Actions */}
                 <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button className="p-1.5 rounded-lg hover:bg-[var(--card-border)]">
-                    <Search className="h-3.5 w-3.5 text-[var(--muted)]" />
+                  <button className="p-1.5 rounded-lg hover:bg-card-border">
+                    <Search className="h-3.5 w-3.5 text-muted" />
                   </button>
                 </div>
               </div>
@@ -119,8 +119,8 @@ export function IncidentList({ incidents, onSelect, selectedId }: IncidentListPr
       </AnimatePresence>
 
       {incidents.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-12 text-[var(--muted)]">
-          <CheckCircle2 className="h-8 w-8 mb-2 text-[var(--success)]" />
+        <div className="flex flex-col items-center justify-center py-12 text-muted">
+          <CheckCircle2 className="h-8 w-8 mb-2 text-success" />
           <p className="text-sm">No active incidents</p>
           <p className="text-xs mt-1">All systems operating normally</p>
         </div>

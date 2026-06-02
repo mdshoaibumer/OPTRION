@@ -28,7 +28,7 @@ const severityColors: Record<Severity, string> = {
 
 export function AlertFeed({ alerts }: AlertFeedProps) {
   return (
-    <div className="space-y-2 max-h-[600px] overflow-y-auto">
+    <div className="space-y-2 max-h-150 overflow-y-auto">
       <AnimatePresence mode="popLayout">
         {alerts.map((alert, idx) => {
           const Icon = severityIcons[alert.severity] || Info;
@@ -47,7 +47,7 @@ export function AlertFeed({ alerts }: AlertFeedProps) {
                 delay: idx * 0.05,
               }}
               className={cn(
-                "rounded-lg border border-[var(--card-border)] border-l-4 p-3",
+                "rounded-lg border border-card-border border-l-4 p-3",
                 colorClass
               )}
             >
@@ -55,10 +55,10 @@ export function AlertFeed({ alerts }: AlertFeedProps) {
                 <Icon className="h-4 w-4 mt-0.5 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{alert.title}</p>
-                  <p className="text-xs text-[var(--muted)] mt-0.5 line-clamp-2">
+                  <p className="text-xs text-muted mt-0.5 line-clamp-2">
                     {alert.message}
                   </p>
-                  <div className="flex items-center gap-2 mt-2 text-[10px] text-[var(--muted)]">
+                  <div className="flex items-center gap-2 mt-2 text-[10px] text-muted">
                     <span className="uppercase font-mono font-semibold">
                       {alert.severity}
                     </span>
@@ -67,7 +67,7 @@ export function AlertFeed({ alerts }: AlertFeedProps) {
                     {alert.delivered_at && (
                       <>
                         <span>·</span>
-                        <span className="text-[var(--success)]">Delivered</span>
+                        <span className="text-success">Delivered</span>
                       </>
                     )}
                   </div>
@@ -79,7 +79,7 @@ export function AlertFeed({ alerts }: AlertFeedProps) {
       </AnimatePresence>
 
       {alerts.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-12 text-[var(--muted)]">
+        <div className="flex flex-col items-center justify-center py-12 text-muted">
           <Bell className="h-8 w-8 mb-2" />
           <p className="text-sm">No alerts</p>
           <p className="text-xs mt-1">Alert rules will trigger notifications here</p>

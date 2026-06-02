@@ -80,7 +80,7 @@ export function StatsCards({ stats }: StatsCardsProps) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: idx * 0.05, duration: 0.4 }}
-          className="rounded-xl border border-[var(--card-border)] bg-[var(--card)] p-4"
+          className="rounded-xl border border-card-border bg-card p-4"
         >
           <div className="flex items-center gap-2 mb-3">
             <div
@@ -99,7 +99,7 @@ export function StatsCards({ stats }: StatsCardsProps) {
           >
             {card.value}
           </motion.p>
-          <p className="text-[11px] text-[var(--muted)] mt-1">{card.label}</p>
+          <p className="text-[11px] text-muted mt-1">{card.label}</p>
         </motion.div>
       ))}
     </div>

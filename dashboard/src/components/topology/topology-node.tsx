@@ -63,7 +63,7 @@ export function TopologyNode({
         "flex flex-col items-center gap-2 w-32",
         statusStyles[status],
         statusPulse[status],
-        selected && "ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--background)]"
+        selected && "ring-2 ring-accent ring-offset-2 ring-offset-background"
       )}
     >
       <Icon className="h-8 w-8" color={`var(--${status === "healthy" ? "success" : status === "degraded" ? "warning" : status === "unhealthy" ? "danger" : "muted"})`} />
@@ -75,7 +75,7 @@ export function TopologyNode({
             backgroundColor: `var(--${status === "healthy" ? "success" : status === "degraded" ? "warning" : status === "unhealthy" ? "danger" : "muted"})`,
           }}
         />
-        <span className="text-[10px] font-mono text-[var(--muted)]">{score}</span>
+        <span className="text-[10px] font-mono text-muted">{score}</span>
       </div>
     </motion.div>
   );

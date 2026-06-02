@@ -1,7 +1,7 @@
 -- API Keys for tenant authentication
 CREATE TABLE IF NOT EXISTS api_keys (
-    id          TEXT PRIMARY KEY,
-    tenant_id   TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    id          UUID PRIMARY KEY,
+    tenant_id   UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     name        TEXT NOT NULL,
     key_hash    TEXT NOT NULL UNIQUE,
     key_prefix  TEXT NOT NULL,         -- First 8 chars for identification

@@ -1,9 +1,9 @@
 # OPTRION — Go Codebase Architecture
 
 **Author:** Principal Go Architect  
-**Date:** 2026-05-29  
-**Version:** 1.0  
-**Status:** Design Complete — Ready for Implementation
+**Date:** 2026-05-29 (Updated: 2026-06-02)  
+**Version:** 2.0  
+**Status:** Implementation Complete — All Contexts Operational
 
 ---
 
@@ -44,14 +44,14 @@
 │  │  Templating             │     │  History                       │  │
 │  └─────────────────────────┘     └─────────────────────────────────┘  │
 │                                                                         │
-│  ┌─────────────────────────┐  (Future)                                 │
-│  │     AI / INTELLIGENCE   │                                           │
-│  │                         │                                           │
-│  │  Root Cause Analysis    │                                           │
-│  │  Recommendations        │                                           │
-│  │  Predictions            │                                           │
-│  │  Engineering Memory     │                                           │
-│  └─────────────────────────┘                                           │
+│  ┌─────────────────────────┐  ┌─────────────────────────────────────┐  │
+│  │  AI ROOT CAUSE ANALYSIS │  │     RECOMMENDATION ENGINE           │  │
+│  │                         │  │                                     │  │
+│  │  Multi-Provider (4)     │  │  Evidence-Based                     │  │
+│  │  Context Builder        │  │  Safety Validation                  │  │
+│  │  Confidence Scoring     │  │  Priority Ranking                   │  │
+│  │  Investigation Hints    │  │  Hallucination Controls             │  │
+│  └─────────────────────────┘  └─────────────────────────────────────┘  │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -67,7 +67,10 @@
 | **Incident** | Detecting, deduplicating, lifecycle-managing incidents | Reliability team | Event-driven consumer, publishes state changes |
 | **Alerting** | Rule evaluation, cooldown, suppression, maintenance windows | Reliability team | Event-driven consumer, commands notification |
 | **Notification** | Channel management, delivery, retries, templating | Platform team | Command-driven (receives "send" commands) |
-| **AI** (future) | Root cause analysis, recommendations, predictions | AI team | Event-driven consumer, async results |
+| **AI** | Root cause analysis, confidence scoring, investigation hints | AI team | Event-driven consumer, multi-provider (Gemini, OpenAI, Anthropic, Ollama) |
+| **Recommendation** | Evidence-based recommendations, safety validation, ranking | AI team | Triggered by AI analysis results |
+| **Registration** | Bulk plug-and-play onboarding | Platform team | Synchronous (single-request setup) |
+| **AutoDiscovery** | Detect infrastructure (PostgreSQL, Redis, HTTP) | Platform team | CLI-triggered, environment variable scanning |
 
 ### Context Communication Rules
 
@@ -265,24 +268,24 @@ optrion/
 │   │           ├── handler.go
 │   │           └── request.go
 │   │
-│   ├── ai/                            # AI bounded context (future)
+│   ├── ai/                            # AI bounded context (IMPLEMENTED)
 │   │   ├── domain/
-│   │   │   ├── analysis.go
-│   │   │   ├── recommendation.go
-│   │   │   ├── prediction.go
-│   │   │   └── events.go
+│   │   │   ├── aianalysis/
+│   │   │   ├── aicontext/
+│   │   │   ├── rootcausereport/
+│   │   │   ├── confidencescore/
+│   │   │   └── investigationhint/
 │   │   ├── app/
-│   │   │   ├── service.go
-│   │   │   └── commands.go
+│   │   │   ├── service/
+│   │   │   ├── contextbuilder/
+│   │   │   ├── prompt/
+│   │   │   └── validation/
 │   │   ├── port/
-│   │   │   ├── repository.go
-│   │   │   ├── provider.go           # AI provider interface
-│   │   │   └── feature_store.go
+│   │   │   └── repository/
 │   │   └── adapter/
-│   │       ├── postgres/
-│   │       │   └── repository.go
-│   │       └── gemini/
-│   │           └── provider.go
+│   │       ├── provider/              # Gemini, OpenAI, Anthropic, Ollama + resilient wrapper
+│   │       ├── repository/
+│   │       └── rest/v1/
 │   │
 │   ├── platform/                      # Cross-cutting platform services
 │   │   ├── eventbus/

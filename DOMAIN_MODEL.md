@@ -1,15 +1,30 @@
 # OPTRION — Domain Model
 
 **Author:** Principal Domain Architect  
-**Date:** 2026-05-29  
-**Version:** 1.0  
-**Status:** Design Complete — Pending Implementation Review
+**Date:** 2026-05-29 (Updated: 2026-06-02)  
+**Version:** 2.0  
+**Status:** Implementation Complete
 
 ---
 
 ## Domain Overview
 
-OPTRION's domain model is designed around six bounded contexts that collaborate through domain events. The model supports multi-tenancy at every level, assumes eventual consistency between contexts, and preserves extension points for future AI integration.
+OPTRION's domain model is designed around ten bounded contexts that collaborate through domain events. The model supports multi-tenancy at every level, assumes eventual consistency between contexts, and includes AI-powered root cause analysis and recommendation intelligence.
+
+### Bounded Contexts (All Implemented)
+
+| # | Context | Responsibility |
+|---|---------|---------------|
+| 1 | **Tenant** | Identity, API keys, plans, audit |
+| 2 | **Health** | Monitoring, scoring, anomaly detection |
+| 3 | **Incident** | Event-sourced lifecycle, deduplication, correlation |
+| 4 | **Alert** | Rules, channels, escalation, Telegram |
+| 5 | **AI** | Root cause analysis (Gemini, OpenAI, Anthropic, Ollama) |
+| 6 | **Recommendation** | Evidence-based recommendations with safety validation |
+| 7 | **Registration** | Bulk plug-and-play onboarding |
+| 8 | **AutoDiscovery** | Auto-detect PostgreSQL, Redis, HTTP services |
+| 9 | **Validation** | Integration validation |
+| 10 | **Config** | YAML configuration loading for CLI |
 
 ### Design Principles Applied
 

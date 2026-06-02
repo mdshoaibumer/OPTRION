@@ -17,42 +17,60 @@ Built for engineering teams who need visibility into the health of their service
 |-----------|-------------|
 | **Health Monitoring** | Pull-based HTTP/TCP/DNS health checks with configurable intervals |
 | **Intelligent Scoring** | Deterministic health scoring (0-100) with hierarchical composition |
-| **Incident Detection** | Automatic incident creation from degraded health with deduplication |
-| **Smart Alerting** | Threshold-based alerts with cooldown, suppression, and escalation |
+| **Incident Detection** | Event-sourced incident lifecycle with deduplication and correlation |
+| **Smart Alerting** | Threshold-based alerts with cooldown, escalation policies, and Telegram notifications |
+| **AI Root Cause Analysis** | Multi-provider AI integration (Gemini, OpenAI, Anthropic, Ollama) for automated diagnostics |
+| **Recommendations Engine** | Evidence-based operational recommendations with confidence scoring |
+| **Auto-Discovery** | Automatic detection of PostgreSQL, Redis, and HTTP services |
 | **Multi-Tenant** | Tenant isolation via PostgreSQL Row-Level Security |
-| **API-First** | RESTful API with scoped API key authentication |
+| **API-First** | RESTful API with scoped API key authentication (SHA-256 hashed) |
+| **Dashboard** | Real-time Next.js dashboard with health visualization and incident war room |
+| **CLI** | Plug-and-play CLI for init, register, and verify workflows |
+| **SDKs** | Go and JavaScript SDKs for integration |
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        OPTRION PLATFORM                          │
-│                                                                 │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────┐  │
-│  │  Tenant  │  │ Catalog  │  │Execution │  │ Intelligence │  │
-│  │          │  │          │  │          │  │              │  │
-│  │ API Keys │  │ Products │  │ Health   │  │ Scoring      │  │
-│  │ Plans    │  │ Envs     │  │ Checks   │  │ Baselines    │  │
-│  │ Quotas   │  │ Comps    │  │ Results  │  │ Anomalies    │  │
-│  └──────────┘  └──────────┘  └────┬─────┘  └──────┬───────┘  │
-│                                    │ events         │ events   │
-│                                    ▼                ▼          │
-│  ┌──────────────────┐  ┌────────────────────────────────────┐ │
-│  │   Notification   │◀─│           Alerting / Incident       │ │
-│  │                  │  │                                    │ │
-│  │  Telegram        │  │  Detection, Dedup, Escalation     │ │
-│  │  Webhooks        │  │  Cooldowns, Maintenance Windows   │ │
-│  └──────────────────┘  └────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          OPTRION PLATFORM                                │
+│                                                                         │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────────────┐   │
+│  │  Tenant  │  │ Catalog  │  │Execution │  │    Intelligence      │   │
+│  │          │  │          │  │          │  │                      │   │
+│  │ API Keys │  │ Products │  │ Health   │  │ Scoring + Anomaly    │   │
+│  │ Plans    │  │ Envs     │  │ Checks   │  │ AI Root Cause        │   │
+│  │ Quotas   │  │ Comps    │  │ Results  │  │ Recommendations      │   │
+│  └──────────┘  └──────────┘  └────┬─────┘  └──────────┬───────────┘   │
+│                                    │ events             │ events        │
+│                                    ▼                    ▼               │
+│  ┌──────────────────┐  ┌────────────────────────────────────────────┐  │
+│  │   Notification   │◀─│           Alerting / Incident               │  │
+│  │                  │  │                                            │  │
+│  │  Telegram        │  │  Event-Sourced State Machine               │  │
+│  │  Escalation      │  │  Deduplication, Correlation, Cooldowns    │  │
+│  └──────────────────┘  └────────────────────────────────────────────┘  │
+│                                                                         │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │                    Platform Services                              │  │
+│  │  Event Bus (Outbox) │ Circuit Breaker │ Rate Limiting │ RLS      │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────┐    ┌──────────────────────┐
+│   Next.js Dashboard  │    │   CLI (optrion-cli)  │
+│   War Room, Health,  │    │   init / register /  │
+│   Topology, AI View  │    │   verify             │
+└──────────────────────┘    └──────────────────────┘
 ```
 
 **Design Principles:**
 - **Modular Monolith** — Single deployable binary with bounded context isolation
 - **Hexagonal Architecture** — Domain logic has zero infrastructure dependencies
 - **Domain-Driven Design** — Aggregates, value objects, domain events
-- **Event-Driven** — In-process event bus with PostgreSQL outbox pattern
+- **Event-Driven** — In-process event bus with PostgreSQL outbox pattern + idempotency
+- **Security-First** — SHA-256 API keys, RLS, brute-force protection, security headers
 
 ---
 
@@ -67,7 +85,9 @@ Built for engineering teams who need visibility into the health of their service
 | Logging | `log/slog` (structured JSON, correlation IDs) |
 | Config | Environment variables with validation |
 | Deployment | Docker Compose (single VPS) |
-| Testing | Standard `testing` package, table-driven tests |
+| Testing | Standard `testing` package, table-driven tests, E2E suites |
+| Dashboard | Next.js 15, TailwindCSS, Framer Motion, TanStack Query |
+| AI Providers | Gemini, OpenAI, Anthropic, Ollama (with circuit breaker) |
 
 ---
 
@@ -75,46 +95,45 @@ Built for engineering teams who need visibility into the health of their service
 
 ```
 optrion/
-├── cmd/optrion/              # Application entry point
-│   └── main.go              # Startup + graceful shutdown
+├── cmd/
+│   ├── optrion/             # Server entry point (graceful shutdown)
+│   └── optrion-cli/         # CLI tool (init, register, verify)
 ├── internal/
 │   ├── app/                 # DI container (composition root)
-│   ├── health/              # Health Monitoring bounded context
-│   │   ├── domain/          # Entities, value objects, types
-│   │   ├── port/            # Repository + collector interfaces
-│   │   ├── app/             # Application service (orchestration)
-│   │   ├── collector/       # Backend, Postgres, Redis, Server collectors
-│   │   ├── scoring/         # Rule-based health scoring engine
-│   │   ├── anomaly/         # Statistical anomaly detection (z-score)
-│   │   ├── scheduler/       # Per-collector periodic scheduling
-│   │   └── adapter/
-│   │       ├── postgres/    # Repository implementations (pgx)
-│   │       └── rest/        # HTTP handlers + response DTOs
-│   ├── tenant/              # Tenant bounded context
-│   │   ├── domain/          # Tenant, Product, Environment, Component
-│   │   ├── port/            # Repository interfaces
-│   │   ├── app/             # Application service
-│   │   └── adapter/
-│   │       ├── postgres/    # Repository implementations
-│   │       └── rest/        # HTTP handlers
+│   ├── tenant/              # Multi-tenancy (products, envs, components, API keys, audit)
+│   ├── health/              # Health monitoring (collectors, scoring, anomaly detection)
+│   ├── incident/            # Event-sourced incident lifecycle (state machine, dedup)
+│   ├── alert/               # Alerting (rules, channels, escalation, Telegram)
+│   ├── ai/                  # AI root cause analysis (4 providers + resilient wrapper)
+│   ├── recommendation/      # Evidence-based recommendations (ranking, safety validation)
+│   ├── registration/        # Bulk registration workflow
+│   ├── autodiscovery/       # Auto-detect PostgreSQL, Redis, HTTP services
+│   ├── validation/          # Integration validation
+│   ├── config/              # YAML config loading (CLI)
 │   ├── platform/            # Cross-cutting infrastructure
-│   │   ├── config/          # Configuration loading + validation
-│   │   ├── logger/          # Structured logging with context
+│   │   ├── config/          # Environment-based configuration
+│   │   ├── logger/          # Structured logging (slog + correlation IDs)
 │   │   ├── database/        # PostgreSQL pool + health checks
 │   │   ├── cache/           # Redis client + health checks
-│   │   └── server/          # HTTP server, router, middleware
-│   └── shared/              # Shared kernel
-│       ├── id/              # UUID v7 generation
-│       └── domain/          # Shared domain errors
-├── migrations/              # Versioned SQL migrations (embedded)
-├── scripts/
-│   ├── seed/                # Tenant hierarchy seed script
-│   └── seed-health/         # Health metric definitions seed
+│   │   ├── server/          # HTTP server, router, auth, rate limiting, RLS
+│   │   ├── eventbus/        # In-process event bus + outbox pattern
+│   │   ├── circuitbreaker/  # Circuit breaker for external calls
+│   │   └── observability/   # Metrics export
+│   └── shared/              # Shared kernel (UUID v7, domain errors)
+├── dashboard/               # Next.js 15 dashboard (health, incidents, topology, AI)
+├── sdk/
+│   ├── go-sdk/              # Go client SDK
+│   └── js-sdk/              # JavaScript client SDK
+├── migrations/              # 27 versioned SQL migrations (embedded)
+├── test/
+│   ├── e2e/                 # Go E2E tests (14 test files)
+│   ├── e2e-playwright/      # Playwright API + UI tests
+│   └── testutil/            # Docker-based test infrastructure
+├── scripts/                 # Seed scripts
 ├── deploy/docker/           # Dockerfile + docker-compose
-├── .env.local               # Local development config
-├── .env.development         # Docker development config
+├── examples/                # Integration examples (Go, Node.js, YAML)
 ├── Makefile                 # Build automation
-└── go.mod                   # Go module definition
+└── go.mod                   # Go module (214 .go files, ~26K lines)
 ```
 
 ---
@@ -229,6 +248,40 @@ make docker-up
 | `GET` | `/api/v1/health/history?tenant_id=` | Historical health scores |
 | `GET` | `/api/v1/health/anomalies?tenant_id=` | Detected anomalies |
 
+### Incidents
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/incidents` | Create incident |
+| `GET` | `/api/v1/incidents` | List incidents (with filtering) |
+| `GET` | `/api/v1/incidents/{id}` | Get incident details |
+| `POST` | `/api/v1/incidents/{id}/acknowledge` | Acknowledge incident |
+| `POST` | `/api/v1/incidents/{id}/resolve` | Resolve incident |
+| `POST` | `/api/v1/incidents/{id}/comments` | Add comment |
+
+### Alerting
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/alerts/rules` | Create alert rule |
+| `GET` | `/api/v1/alerts/rules` | List alert rules |
+| `POST` | `/api/v1/alerts/channels` | Create notification channel |
+| `GET` | `/api/v1/alerts` | List triggered alerts |
+
+### AI & Recommendations
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/ai/analyze` | Trigger AI root cause analysis |
+| `GET` | `/api/v1/ai/analyses/{id}` | Get analysis results |
+| `GET` | `/api/v1/recommendations` | List recommendations |
+
+### Registration (Plug & Play)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/registration/bulk` | Bulk register tenant + components |
+
 ---
 
 ## Health Monitoring
@@ -330,10 +383,14 @@ Production requires `DB_SSL_MODE != disable` and `DB_PASSWORD` to be set.
 | 1 | ✅ Complete | Foundation (config, logging, DB, Redis, HTTP, Docker) |
 | 2 | ✅ Complete | Tenant bounded context (multi-tenant, products, envs, components) |
 | 3 | ✅ Complete | Health Monitoring Engine (collectors, scoring, anomaly detection) |
-| 4 | 🔲 Planned | Incident detection |
-| 5 | 🔲 Planned | Alerting + Notifications |
-| 6 | 🔲 Planned | API authentication |
-| 7 | 🔲 Planned | Dashboard (Next.js) |
+| 4 | ✅ Complete | Incident detection (event-sourced state machine, deduplication, correlation) |
+| 5 | ✅ Complete | Alerting + Notifications (rules, escalation, Telegram, cooldowns) |
+| 6 | ✅ Complete | API authentication (SHA-256 hashed keys, brute-force protection, RLS) |
+| 7 | ✅ Complete | AI Root Cause Analysis (Gemini, OpenAI, Anthropic, Ollama + circuit breaker) |
+| 8 | ✅ Complete | Recommendation Engine (evidence-based, safety validation, ranking) |
+| 9 | ✅ Complete | Dashboard (Next.js 15 — health, incidents, topology, AI views) |
+| 10 | ✅ Complete | CLI + SDKs (plug-and-play onboarding, Go SDK, JS SDK) |
+| 11 | ✅ Complete | Platform hardening (event bus, outbox, rate limiting, observability) |
 
 ---
 
@@ -347,6 +404,35 @@ Detailed architecture documentation available in the repository:
 - [`GO_ARCHITECTURE.md`](GO_ARCHITECTURE.md) — Go codebase structure, dependency rules
 - [`API_CONTRACTS.md`](API_CONTRACTS.md) — REST API contracts, error model
 - [`IMPLEMENTATION_STRATEGY.md`](IMPLEMENTATION_STRATEGY.md) — Execution roadmap
+- [`PLUGANDPLAY_GUIDE.md`](PLUGANDPLAY_GUIDE.md) — CLI onboarding guide
+
+---
+
+## Project Stats
+
+| Metric | Value |
+|--------|-------|
+| Go source files | 214 |
+| Lines of Go code | ~26,000 |
+| Bounded contexts | 10 |
+| Database migrations | 27 |
+| Test files | 64 (unit + E2E) |
+| API endpoints | 30+ |
+| AI providers supported | 4 |
+| Dashboard pages | 6 |
+
+---
+
+## Security
+
+- SHA-256 hashed API keys (never stored in plaintext)
+- Brute-force protection (5 failures → 15-min IP lockout)
+- Timing-attack resistant authentication (`subtle.ConstantTimeCompare`)
+- PostgreSQL Row-Level Security on all tenant tables
+- Security headers (HSTS, CSP, X-Frame-Options, etc.)
+- 1MB request body limit with strict JSON validation
+- Non-root Docker container (Alpine 3.20)
+- Multi-stage build with stripped symbols
 
 ---
 
@@ -365,3 +451,6 @@ MIT
 ## Author
 
 Built by a solo engineer, after work hours, one bounded context at a time.
+
+**Architecture:** Domain-Driven Design • Hexagonal Architecture • Event Sourcing • CQRS patterns  
+**Practices:** SOLID principles • Clean Architecture • Security-first • Comprehensive testing

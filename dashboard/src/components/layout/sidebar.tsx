@@ -27,11 +27,11 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-50 w-16 lg:w-64 flex flex-col border-r border-[var(--card-border)] bg-[var(--card)]">
+    <aside className="fixed inset-y-0 left-0 z-50 w-16 lg:w-64 flex flex-col border-r border-card-border bg-card">
       {/* Logo */}
-      <div className="flex h-16 items-center px-4 border-b border-[var(--card-border)]">
+      <div className="flex h-16 items-center px-4 border-b border-card-border">
         <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-lg bg-[var(--accent)] flex items-center justify-center">
+          <div className="h-8 w-8 rounded-lg bg-accent flex items-center justify-center">
             <Activity className="h-4 w-4 text-white" />
           </div>
           <span className="hidden lg:block font-semibold text-lg tracking-tight">
@@ -51,8 +51,8 @@ export function Sidebar() {
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
                 isActive
-                  ? "bg-[var(--accent-glow)] text-[var(--accent)] border border-[var(--accent)]/20"
-                  : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--card-border)]"
+                  ? "bg-(--accent-glow) text-accent border border-accent/20"
+                  : "text-muted hover:text-foreground hover:bg-card-border"
               )}
             >
               <item.icon className="h-5 w-5 shrink-0" />
@@ -63,9 +63,9 @@ export function Sidebar() {
       </nav>
 
       {/* Status */}
-      <div className="p-4 border-t border-[var(--card-border)]">
-        <div className="hidden lg:flex items-center gap-2 text-xs text-[var(--muted)]">
-          <div className="h-2 w-2 rounded-full bg-[var(--success)] pulse-healthy" />
+      <div className="p-4 border-t border-card-border">
+        <div className="hidden lg:flex items-center gap-2 text-xs text-muted">
+          <div className="h-2 w-2 rounded-full bg-success pulse-healthy" />
           <span>System Operational</span>
         </div>
       </div>

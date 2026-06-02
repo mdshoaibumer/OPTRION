@@ -201,11 +201,12 @@ func APIKeyIDFromContext(ctx context.Context) string {
 
 // APIKeyRecord represents a stored API key for validation.
 type APIKeyRecord struct {
-	ID        string
-	TenantID  string
-	KeyHash   string
-	Status    string
-	ExpiresAt *time.Time
+	ID             string
+	TenantID       string
+	KeyHash        string
+	Status         string
+	ExpiresAt      *time.Time
+	GraceExpiresAt *time.Time // Set during key rotation; key is rejected after this time
 }
 
 // APIKeyValidator is the interface for looking up API keys.
@@ -289,6 +290,13 @@ func APIKeyAuth(validator APIKeyValidator, logger *slog.Logger) Middleware {
 			if record.ExpiresAt != nil && time.Now().After(*record.ExpiresAt) {
 				failureTracker.RecordFailure(clientIP)
 				WriteError(w, http.StatusUnauthorized, "api key has expired")
+				return
+			}
+
+			// Reject keys past their rotation grace period
+			if record.GraceExpiresAt != nil && time.Now().After(*record.GraceExpiresAt) {
+				failureTracker.RecordFailure(clientIP)
+				WriteError(w, http.StatusUnauthorized, "api key has been rotated, use the new key")
 				return
 			}
 

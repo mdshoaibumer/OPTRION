@@ -3,11 +3,13 @@
 [![Go](https://img.shields.io/badge/Go-1.23-00ADD8?style=flat&logo=go)](https://go.dev)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?style=flat&logo=postgresql)](https://www.postgresql.org/)
 [![Redis](https://img.shields.io/badge/Redis-7-DC382D?style=flat&logo=redis)](https://redis.io/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-AGPL_3.0-blue.svg)](LICENSE)
 
 **OPTRION** is an engineering intelligence platform that provides real-time health monitoring, intelligent scoring, incident detection, and automated alerting for distributed software systems.
 
 Built for engineering teams who need visibility into the health of their services without the complexity of enterprise observability tools.
+
+![OPTRION Dashboard Mockup](docs/images/dashboard_mockup.png)
 
 ---
 
@@ -444,7 +446,11 @@ Detailed architecture documentation available in the repository:
 
 ## License
 
-MIT
+OPTRION is licensed under the [GNU Affero General Public License v3.0 (AGPL-3.0)](LICENSE).
+
+If you modify OPTRION and provide it as a network service, you must make the modified source code available under the AGPL-3.0.
+
+Commercial licensing and dedicated enterprise support may be available in the future.
 
 ---
 

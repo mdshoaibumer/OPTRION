@@ -137,3 +137,39 @@ func toAnomalyResponse(a *domain.Anomaly) AnomalyResponse {
 	}
 	return resp
 }
+
+// CheckConfigResponse represents a health check configuration.
+type CheckConfigResponse struct {
+	ID            string `json:"id"`
+	TenantID      string `json:"tenant_id"`
+	ComponentID   string `json:"component_id"`
+	CheckInterval string `json:"check_interval"`
+	Timeout       string `json:"timeout"`
+	Retries       int    `json:"retries"`
+	Enabled       bool   `json:"enabled"`
+	CreatedAt     string `json:"created_at"`
+	UpdatedAt     string `json:"updated_at"`
+}
+
+// CheckConfigRequest is the request body for creating/updating health check configs.
+type CheckConfigRequest struct {
+	ComponentID   string `json:"component_id"`
+	CheckInterval string `json:"check_interval,omitempty"` // e.g., "30s", "1m"
+	Timeout       string `json:"timeout,omitempty"`        // e.g., "10s"
+	Retries       *int   `json:"retries,omitempty"`
+	Enabled       *bool  `json:"enabled,omitempty"`
+}
+
+func toCheckConfigResponse(c *domain.HealthCheckConfig) CheckConfigResponse {
+	return CheckConfigResponse{
+		ID:            c.ID,
+		TenantID:      c.TenantID,
+		ComponentID:   c.ComponentID,
+		CheckInterval: c.CheckInterval.String(),
+		Timeout:       c.Timeout.String(),
+		Retries:       c.Retries,
+		Enabled:       c.Enabled,
+		CreatedAt:     c.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:     c.UpdatedAt.Format(time.RFC3339),
+	}
+}

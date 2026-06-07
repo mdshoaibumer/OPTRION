@@ -13,14 +13,15 @@ import (
 
 // HealthService orchestrates health monitoring use cases.
 type HealthService struct {
-	metrics    port.HealthMetricRepository
-	snapshots  port.MetricSnapshotRepository
-	scores     port.HealthScoreRepository
-	components port.ComponentHealthRepository
-	anomalies  port.AnomalyRepository
-	engine     *scoring.Engine
-	detector   *anomaly.Detector
-	logger     *slog.Logger
+	metrics      port.HealthMetricRepository
+	snapshots    port.MetricSnapshotRepository
+	scores       port.HealthScoreRepository
+	components   port.ComponentHealthRepository
+	anomalies    port.AnomalyRepository
+	checkConfigs port.HealthCheckConfigRepository
+	engine       *scoring.Engine
+	detector     *anomaly.Detector
+	logger       *slog.Logger
 }
 
 // NewHealthService creates a new HealthService with all dependencies.
@@ -44,6 +45,12 @@ func NewHealthService(
 		detector:   detector,
 		logger:     logger,
 	}
+}
+
+// WithCheckConfigs sets the health check configuration repository.
+func (s *HealthService) WithCheckConfigs(repo port.HealthCheckConfigRepository) *HealthService {
+	s.checkConfigs = repo
+	return s
 }
 
 // ProcessCollectorResult handles results from a collector run.
@@ -267,4 +274,28 @@ func (s *HealthService) GetAnomalies(ctx context.Context, tenantID string, filte
 		filter.Limit = 200
 	}
 	return s.anomalies.ListByTenant(ctx, tenantID, filter)
+}
+
+// GetCheckConfig retrieves health check configuration for a component.
+func (s *HealthService) GetCheckConfig(ctx context.Context, componentID string) (*domain.HealthCheckConfig, error) {
+	if s.checkConfigs == nil {
+		return nil, nil
+	}
+	return s.checkConfigs.GetByComponent(ctx, componentID)
+}
+
+// ListCheckConfigs retrieves all health check configurations for a tenant.
+func (s *HealthService) ListCheckConfigs(ctx context.Context, tenantID string) ([]*domain.HealthCheckConfig, error) {
+	if s.checkConfigs == nil {
+		return nil, nil
+	}
+	return s.checkConfigs.ListByTenant(ctx, tenantID)
+}
+
+// SaveCheckConfig persists a health check configuration.
+func (s *HealthService) SaveCheckConfig(ctx context.Context, config *domain.HealthCheckConfig) error {
+	if s.checkConfigs == nil {
+		return nil
+	}
+	return s.checkConfigs.Upsert(ctx, config)
 }

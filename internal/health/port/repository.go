@@ -61,3 +61,10 @@ type AnomalyFilter struct {
 	Limit       int
 	Offset      int
 }
+
+// HealthCheckConfigRepository persists per-component health check configurations.
+type HealthCheckConfigRepository interface {
+	Upsert(ctx context.Context, config *domain.HealthCheckConfig) error
+	GetByComponent(ctx context.Context, componentID string) (*domain.HealthCheckConfig, error)
+	ListByTenant(ctx context.Context, tenantID string) ([]*domain.HealthCheckConfig, error)
+}

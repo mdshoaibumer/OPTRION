@@ -40,6 +40,8 @@ func (h *Handler) RegisterAuthenticatedRoutes(mux *http.ServeMux, authWrap func(
 	mux.Handle("GET /api/v1/health/components", authWrap(http.HandlerFunc(h.GetComponents)))
 	mux.Handle("GET /api/v1/health/history", authWrap(http.HandlerFunc(h.GetHistory)))
 	mux.Handle("GET /api/v1/health/anomalies", authWrap(http.HandlerFunc(h.GetAnomalies)))
+	mux.Handle("GET /api/v1/health-check-configs", authWrap(http.HandlerFunc(h.GetCheckConfigs)))
+	mux.Handle("POST /api/v1/health-check-configs", authWrap(http.HandlerFunc(h.UpsertCheckConfig)))
 }
 
 // GetSummary handles GET /api/v1/health/summary?tenant_id=...
@@ -148,6 +150,100 @@ func (h *Handler) GetAnomalies(w http.ResponseWriter, r *http.Request) {
 	}
 
 	server.WriteJSON(w, http.StatusOK, ListResponse{Data: resp, Count: len(resp)})
+}
+
+// GetCheckConfigs handles GET /api/v1/health-check-configs?component_id=...
+func (h *Handler) GetCheckConfigs(w http.ResponseWriter, r *http.Request) {
+	tenantID := server.TenantIDFromContext(r.Context())
+	if tenantID == "" {
+		server.WriteJSON(w, http.StatusUnauthorized, ErrorResponse{Error: "authentication required"})
+		return
+	}
+
+	componentID := r.URL.Query().Get("component_id")
+	if componentID != "" {
+		config, err := h.service.GetCheckConfig(r.Context(), componentID)
+		if err != nil {
+			h.logger.ErrorContext(r.Context(), "failed to get check config", "error", err)
+			server.WriteJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "internal server error"})
+			return
+		}
+		if config == nil {
+			// Return defaults
+			config = domain.NewHealthCheckConfig(tenantID, componentID)
+		}
+		server.WriteJSON(w, http.StatusOK, toCheckConfigResponse(config))
+		return
+	}
+
+	configs, err := h.service.ListCheckConfigs(r.Context(), tenantID)
+	if err != nil {
+		h.logger.ErrorContext(r.Context(), "failed to list check configs", "error", err)
+		server.WriteJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "internal server error"})
+		return
+	}
+	resp := make([]CheckConfigResponse, 0, len(configs))
+	for _, c := range configs {
+		resp = append(resp, toCheckConfigResponse(c))
+	}
+	server.WriteJSON(w, http.StatusOK, ListResponse{Data: resp, Count: len(resp)})
+}
+
+// UpsertCheckConfig handles POST /api/v1/health-check-configs
+func (h *Handler) UpsertCheckConfig(w http.ResponseWriter, r *http.Request) {
+	tenantID := server.TenantIDFromContext(r.Context())
+	if tenantID == "" {
+		server.WriteJSON(w, http.StatusUnauthorized, ErrorResponse{Error: "authentication required"})
+		return
+	}
+
+	var req CheckConfigRequest
+	if err := server.ReadJSON(w, r, &req); err != nil {
+		server.WriteJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid request body"})
+		return
+	}
+	if req.ComponentID == "" {
+		server.WriteJSON(w, http.StatusBadRequest, ErrorResponse{Error: "component_id is required"})
+		return
+	}
+
+	config := domain.NewHealthCheckConfig(tenantID, req.ComponentID)
+
+	if req.CheckInterval != "" {
+		d, err := time.ParseDuration(req.CheckInterval)
+		if err != nil {
+			server.WriteJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid check_interval format"})
+			return
+		}
+		config.CheckInterval = d
+	}
+	if req.Timeout != "" {
+		d, err := time.ParseDuration(req.Timeout)
+		if err != nil {
+			server.WriteJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid timeout format"})
+			return
+		}
+		config.Timeout = d
+	}
+	if req.Retries != nil {
+		config.Retries = *req.Retries
+	}
+	if req.Enabled != nil {
+		config.Enabled = *req.Enabled
+	}
+
+	if err := config.Validate(); err != nil {
+		server.WriteJSON(w, http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	if err := h.service.SaveCheckConfig(r.Context(), config); err != nil {
+		h.logger.ErrorContext(r.Context(), "failed to save check config", "error", err)
+		server.WriteJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "internal server error"})
+		return
+	}
+
+	server.WriteJSON(w, http.StatusOK, toCheckConfigResponse(config))
 }
 
 // --- Helpers ---

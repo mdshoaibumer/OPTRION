@@ -219,7 +219,7 @@ func (h *Handler) CreateEnvironment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	env, err := h.service.CreateEnvironment(r.Context(), app.CreateEnvironmentCmd{
+	env, err := h.service.CreateEnvironment(r.Context(), &app.CreateEnvironmentCmd{
 		TenantID:  tenantID,
 		ProductID: req.ProductID,
 		Name:      req.Name,
@@ -286,7 +286,7 @@ func (h *Handler) RegisterComponent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	comp, err := h.service.RegisterComponent(r.Context(), app.RegisterComponentCmd{
+	comp, err := h.service.RegisterComponent(r.Context(), &app.RegisterComponentCmd{
 		TenantID:      tenantID,
 		ProductID:     req.ProductID,
 		EnvironmentID: req.EnvironmentID,

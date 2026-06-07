@@ -104,7 +104,7 @@ func (r *APIKeyRepository) RotateAPIKey(ctx context.Context, oldKeyID, tenantID,
 	if err != nil {
 		return "", "", fmt.Errorf("beginning transaction: %w", err)
 	}
-	defer tx.Rollback(ctx) //nolint:errcheck
+	defer tx.Rollback(ctx) //nolint:errcheck // rollback is no-op after commit
 
 	now := time.Now().UTC()
 	graceExpiresAt := now.Add(gracePeriod)

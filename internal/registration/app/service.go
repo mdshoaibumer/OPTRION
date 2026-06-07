@@ -104,7 +104,7 @@ func (rs *RegistrationService) Register(ctx context.Context, req domain.Registra
 		Tier:      req.Environment.Tier,
 	}
 
-	env, err := rs.tenantService.CreateEnvironment(ctx, envCmd)
+	env, err := rs.tenantService.CreateEnvironment(ctx, &envCmd)
 	if err != nil {
 		audit.MarkFailed(err)
 		if err := rs.auditRepository.CreateAudit(ctx, audit); err != nil {

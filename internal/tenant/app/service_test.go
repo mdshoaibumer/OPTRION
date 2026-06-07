@@ -422,7 +422,7 @@ func TestCreateEnvironment_Success(t *testing.T) {
 		Slug:     "backend",
 	})
 
-	env, err := svc.CreateEnvironment(ctx, app.CreateEnvironmentCmd{
+	env, err := svc.CreateEnvironment(ctx, &app.CreateEnvironmentCmd{
 		TenantID:  tenant.ID,
 		ProductID: product.ID,
 		Name:      "Production",
@@ -457,7 +457,7 @@ func TestRegisterComponent_Success(t *testing.T) {
 		Slug:     "backend",
 	})
 
-	env, _ := svc.CreateEnvironment(ctx, app.CreateEnvironmentCmd{
+	env, _ := svc.CreateEnvironment(ctx, &app.CreateEnvironmentCmd{
 		TenantID:  tenant.ID,
 		ProductID: product.ID,
 		Name:      "Production",
@@ -465,7 +465,7 @@ func TestRegisterComponent_Success(t *testing.T) {
 		Tier:      "production",
 	})
 
-	comp, err := svc.RegisterComponent(ctx, app.RegisterComponentCmd{
+	comp, err := svc.RegisterComponent(ctx, &app.RegisterComponentCmd{
 		TenantID:      tenant.ID,
 		ProductID:     product.ID,
 		EnvironmentID: env.ID,

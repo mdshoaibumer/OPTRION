@@ -63,7 +63,7 @@ type CreateEnvironmentRequest struct {
 }
 
 // Validate checks the request fields.
-func (r CreateEnvironmentRequest) Validate() []string {
+func (r *CreateEnvironmentRequest) Validate() []string {
 	var errs []string
 	if r.TenantID == "" {
 		errs = append(errs, "tenant_id is required")
@@ -98,7 +98,7 @@ type RegisterComponentRequest struct {
 }
 
 // Validate checks the request fields.
-func (r RegisterComponentRequest) Validate() []string {
+func (r *RegisterComponentRequest) Validate() []string {
 	var errs []string
 	if r.TenantID == "" {
 		errs = append(errs, "tenant_id is required")

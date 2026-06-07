@@ -82,7 +82,7 @@ func (s *TenantService) CreateTenant(ctx context.Context, cmd CreateTenantCmd) (
 	if err != nil {
 		return nil, err
 	}
-	defer s.uow.Rollback(txCtx) //nolint:errcheck
+	defer s.uow.Rollback(txCtx) //nolint:errcheck // rollback is no-op after commit
 
 	if err := s.tenants.Create(txCtx, tenant); err != nil {
 		return nil, err
@@ -153,7 +153,7 @@ func (s *TenantService) CreateProduct(ctx context.Context, cmd CreateProductCmd)
 	if err != nil {
 		return nil, err
 	}
-	defer s.uow.Rollback(txCtx) //nolint:errcheck
+	defer s.uow.Rollback(txCtx) //nolint:errcheck // rollback is no-op after commit
 
 	if err := s.products.Create(txCtx, product); err != nil {
 		return nil, err
@@ -190,7 +190,7 @@ type CreateEnvironmentCmd struct {
 }
 
 // CreateEnvironment registers a new environment under a product.
-func (s *TenantService) CreateEnvironment(ctx context.Context, cmd CreateEnvironmentCmd) (*domain.Environment, error) {
+func (s *TenantService) CreateEnvironment(ctx context.Context, cmd *CreateEnvironmentCmd) (*domain.Environment, error) {
 	// Verify tenant is active
 	tenant, err := s.tenants.GetByID(ctx, cmd.TenantID)
 	if err != nil {
@@ -237,7 +237,7 @@ func (s *TenantService) CreateEnvironment(ctx context.Context, cmd CreateEnviron
 	if err != nil {
 		return nil, err
 	}
-	defer s.uow.Rollback(txCtx) //nolint:errcheck
+	defer s.uow.Rollback(txCtx) //nolint:errcheck // rollback is no-op after commit
 
 	if err := s.environments.Create(txCtx, env); err != nil {
 		return nil, err
@@ -279,7 +279,7 @@ type RegisterComponentCmd struct {
 }
 
 // RegisterComponent registers a new component within an environment.
-func (s *TenantService) RegisterComponent(ctx context.Context, cmd RegisterComponentCmd) (*domain.Component, error) {
+func (s *TenantService) RegisterComponent(ctx context.Context, cmd *RegisterComponentCmd) (*domain.Component, error) {
 	// Verify tenant is active
 	tenant, err := s.tenants.GetByID(ctx, cmd.TenantID)
 	if err != nil {
@@ -326,7 +326,7 @@ func (s *TenantService) RegisterComponent(ctx context.Context, cmd RegisterCompo
 	if err != nil {
 		return nil, err
 	}
-	defer s.uow.Rollback(txCtx) //nolint:errcheck
+	defer s.uow.Rollback(txCtx) //nolint:errcheck // rollback is no-op after commit
 
 	if err := s.components.Create(txCtx, comp); err != nil {
 		return nil, err
@@ -441,7 +441,7 @@ func (s *TenantService) CreateComponent(ctx context.Context, cmd *CreateComponen
 	// Generate slug from name
 	slugStr := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(cmd.Name), " ", "-"))
 
-	return s.RegisterComponent(ctx, RegisterComponentCmd{
+	return s.RegisterComponent(ctx, &RegisterComponentCmd{
 		TenantID:      tenantID,
 		ProductID:     productID,
 		EnvironmentID: cmd.EnvironmentID,

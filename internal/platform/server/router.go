@@ -11,7 +11,8 @@ type RouterConfig struct {
 	RateLimitRPS   int
 	AuthEnabled    bool
 	AuthValidator  APIKeyValidator
-	TrustedProxies []string // IPs allowed to set X-Forwarded-For
+	TrustedProxies []string    // IPs allowed to set X-Forwarded-For
+	RateLimiter    RateLimiter // Optional: provide a custom rate limiter (e.g., Redis-based)
 }
 
 // Router sets up all HTTP routes for the application.
@@ -25,7 +26,9 @@ type Router struct {
 // NewRouter creates a new router with all middleware applied.
 func NewRouter(logger *slog.Logger, cfg RouterConfig) *Router {
 	var limiter RateLimiter
-	if cfg.RateLimitRPS > 0 {
+	if cfg.RateLimiter != nil {
+		limiter = cfg.RateLimiter
+	} else if cfg.RateLimitRPS > 0 {
 		limiter = NewInMemoryRateLimiter(cfg.RateLimitRPS)
 	}
 

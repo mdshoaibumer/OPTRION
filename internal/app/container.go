@@ -34,6 +34,8 @@ import (
 	"github.com/optrion/optrion/internal/platform/database"
 	"github.com/optrion/optrion/internal/platform/eventbus"
 	"github.com/optrion/optrion/internal/platform/logger"
+	"github.com/optrion/optrion/internal/platform/observability"
+	"github.com/optrion/optrion/internal/platform/retention"
 	"github.com/optrion/optrion/internal/platform/server"
 	recpg "github.com/optrion/optrion/internal/recommendation/adapter/postgres"
 	recrest "github.com/optrion/optrion/internal/recommendation/adapter/rest/v1"
@@ -65,8 +67,11 @@ type Container struct {
 	RecommendationService *recservice.RecommendationService
 
 	// Infrastructure
-	EventBus  *eventbus.Bus
-	Scheduler *scheduler.Scheduler
+	EventBus   *eventbus.Bus
+	Scheduler  *scheduler.Scheduler
+	Metrics    *observability.Metrics
+	SSEBroker  *server.SSEBroker
+	CleanupJob *retention.CleanupJob
 
 	// Internal components for lifecycle management
 	Router              *server.Router
@@ -75,6 +80,7 @@ type Container struct {
 	alertRepo           *alertpg.AlertPostgresRepository
 	alertRuleRepo       *alertpg.AlertRulePostgresRepository
 	escalationRepo      *alertpg.EscalationPolicyPostgresRepository
+	apiKeyRepo          *tenantpg.APIKeyRepository
 }
 
 // Migrations is set by main.go to provide embedded migration files.
@@ -125,6 +131,12 @@ func NewContainer(ctx context.Context) (*Container, error) {
 	// 6. Event Bus
 	c.EventBus = eventbus.New(c.Logger.With("component", "eventbus"))
 
+	// 6b. Metrics collector
+	c.Metrics = observability.NewMetrics(c.Logger.With("component", "metrics"))
+
+	// 6c. SSE Broker for real-time events
+	c.SSEBroker = server.NewSSEBroker(c.Logger.With("component", "sse"))
+
 	// 7. Wire tenant bounded context
 	pool := db.Pool()
 	tenantRepo := tenantpg.NewTenantRepository(pool)
@@ -152,6 +164,8 @@ func NewContainer(ctx context.Context) (*Container, error) {
 		metricRepo, snapshotRepo, scoreRepo, componentHealthRepo,
 		anomalyRepo, scoringEngine, detector, c.Logger.With("component", "health-monitor"),
 	)
+	checkConfigRepo := healthpg.NewHealthCheckConfigRepository(pool)
+	c.HealthService.WithCheckConfigs(checkConfigRepo)
 
 	// 9. Scheduler (collectors registered via seed/bootstrap)
 	c.Scheduler = scheduler.NewScheduler(
@@ -195,66 +209,140 @@ func NewContainer(ctx context.Context) (*Container, error) {
 	)
 
 	// 12. Subscribe event bus handlers (cross-context communication)
+	sseAdapter := server.NewSSEEventBusAdapter(c.SSEBroker)
+
 	c.EventBus.Subscribe("incident.opened", func(ctx context.Context, evt eventbus.Event) error {
 		incEvt, ok := evt.(eventbus.IncidentOpenedEvent)
 		if !ok {
 			return nil
 		}
+		// Forward to SSE clients
+		sseAdapter.ForwardEvent(ctx, incEvt.Tenant, "incident.opened", map[string]interface{}{
+			"incident_id":  incEvt.IncidentID,
+			"component_id": incEvt.ComponentID,
+			"title":        incEvt.Title,
+			"severity":     incEvt.Severity,
+		})
 		return c.AlertEngine.ProcessEvent(ctx, alertEventFromIncidentOpened(incEvt))
 	})
 
-	// 12b. Wire AI root cause analysis service
+	c.EventBus.Subscribe("incident.resolved", func(ctx context.Context, evt eventbus.Event) error {
+		resEvt, ok := evt.(eventbus.IncidentResolvedEvent)
+		if !ok {
+			return nil
+		}
+		sseAdapter.ForwardEvent(ctx, resEvt.Tenant, "incident.resolved", map[string]interface{}{
+			"incident_id":  resEvt.IncidentID,
+			"component_id": resEvt.ComponentID,
+		})
+		return nil
+	})
+
+	c.EventBus.Subscribe("health.degraded", func(ctx context.Context, evt eventbus.Event) error {
+		hEvt, ok := evt.(eventbus.HealthDegradedEvent)
+		if !ok {
+			return nil
+		}
+		sseAdapter.ForwardEvent(ctx, hEvt.Tenant, "health.degraded", map[string]interface{}{
+			"component_id": hEvt.ComponentID,
+			"score":        hEvt.Score,
+			"prev_score":   hEvt.PrevScore,
+		})
+		return nil
+	})
+
+	c.EventBus.Subscribe("health.recovered", func(ctx context.Context, evt eventbus.Event) error {
+		hEvt, ok := evt.(eventbus.HealthRecoveredEvent)
+		if !ok {
+			return nil
+		}
+		sseAdapter.ForwardEvent(ctx, hEvt.Tenant, "health.recovered", map[string]interface{}{
+			"component_id": hEvt.ComponentID,
+			"score":        hEvt.Score,
+		})
+		return nil
+	})
+
+	// 12b. Wire AI root cause analysis service with fallback chain
 	if cfg.AI.Enabled && cfg.AI.APIKey != "" {
-		var aiProvider provider.AIProvider
+		// Build primary provider based on configuration
+		var primaryProvider provider.AIProvider
 		switch cfg.AI.Provider {
-		case "gemini":
-			aiProvider = provider.NewResilientProvider(
-				provider.NewGeminiProvider(provider.GeminiConfig{
-					APIKey:    cfg.AI.APIKey,
-					Model:     cfg.AI.Model,
-					MaxTokens: cfg.AI.MaxTokens,
-				}),
-				circuitbreaker.DefaultConfig(),
-			)
-		default:
-			aiProvider = provider.NewResilientProvider(
-				provider.NewGeminiProvider(provider.GeminiConfig{
-					APIKey:    cfg.AI.APIKey,
-					Model:     cfg.AI.Model,
-					MaxTokens: cfg.AI.MaxTokens,
-				}),
-				circuitbreaker.DefaultConfig(),
-			)
+		case "openai":
+			primaryProvider = provider.NewOpenAIProvider(provider.OpenAIConfig{
+				APIKey:    cfg.AI.APIKey,
+				Model:     cfg.AI.Model,
+				MaxTokens: cfg.AI.MaxTokens,
+			})
+		case "anthropic":
+			primaryProvider = provider.NewAnthropicProvider(provider.AnthropicConfig{
+				APIKey:    cfg.AI.APIKey,
+				Model:     cfg.AI.Model,
+				MaxTokens: cfg.AI.MaxTokens,
+			})
+		default: // gemini
+			primaryProvider = provider.NewGeminiProvider(provider.GeminiConfig{
+				APIKey:    cfg.AI.APIKey,
+				Model:     cfg.AI.Model,
+				MaxTokens: cfg.AI.MaxTokens,
+			})
 		}
 
-		aiAnalysisRepo := aipg.NewAIAnalysisRepository(pool)
-		aiContextRepo := aipg.NewAIContextRepository(pool)
-		aiReportRepo := aipg.NewRootCauseReportRepository(pool)
-		incidentCtxProvider := aiservice.NewIncidentContextProvider(c.IncidentService)
+		// Wrap primary with circuit breaker
+		resilientPrimary := provider.NewResilientProvider(primaryProvider, circuitbreaker.DefaultConfig())
 
-		c.AIService = aiservice.NewRootCauseService(
-			aiProvider, aiAnalysisRepo, aiContextRepo, aiReportRepo,
-			incidentCtxProvider, c.Logger.With("component", "ai-rootcause"),
+		// Build fallback chain: primary → fallback providers
+		aiProviders := []provider.AIProvider{resilientPrimary}
+
+		// Add Ollama as a local fallback if available (no API key needed)
+		ollamaProvider := provider.NewResilientProvider(
+			provider.NewOllamaProvider(provider.OllamaConfig{
+				Model: "llama3",
+			}),
+			circuitbreaker.DefaultConfig(),
 		)
+		aiProviders = append(aiProviders, ollamaProvider)
 
-		// Wire recommendation service (reuses same AI provider)
-		recRepo := recpg.NewRecommendationRepository(pool)
-		c.RecommendationService = recservice.NewRecommendationService(
-			aiProvider, recRepo, incidentCtxProvider,
-			c.Logger.With("component", "recommendation"),
+		aiProvider, err := provider.NewFallbackProvider(
+			c.Logger.With("component", "ai-fallback"),
+			aiProviders...,
 		)
+		if err != nil {
+			c.Logger.Warn("failed to create AI fallback chain", "error", err)
+		} else {
+			aiAnalysisRepo := aipg.NewAIAnalysisRepository(pool)
+			aiContextRepo := aipg.NewAIContextRepository(pool)
+			aiReportRepo := aipg.NewRootCauseReportRepository(pool)
+			incidentCtxProvider := aiservice.NewIncidentContextProvider(c.IncidentService)
 
-		c.Logger.Info("AI services enabled", "provider", cfg.AI.Provider, "model", cfg.AI.Model)
+			c.AIService = aiservice.NewRootCauseService(
+				aiProvider, aiAnalysisRepo, aiContextRepo, aiReportRepo,
+				incidentCtxProvider, c.Logger.With("component", "ai-rootcause"),
+			)
+
+			// Wire recommendation service (reuses same AI provider)
+			recRepo := recpg.NewRecommendationRepository(pool)
+			c.RecommendationService = recservice.NewRecommendationService(
+				aiProvider, recRepo, incidentCtxProvider,
+				c.Logger.With("component", "recommendation"),
+			)
+
+			c.Logger.Info("AI services enabled",
+				"provider", cfg.AI.Provider,
+				"model", cfg.AI.Model,
+				"fallback_chain", aiProvider.Name(),
+			)
+		}
 	} else {
 		c.Logger.Info("AI services disabled (set AI_ENABLED=true and AI_API_KEY to enable)")
 	}
 
 	// 13. API Key authentication
-	apiKeyRepo := tenantpg.NewAPIKeyRepository(pool)
+	c.apiKeyRepo = tenantpg.NewAPIKeyRepository(pool)
 
 	// 13b. Registration service
 	regRepo := regpg.NewRegistrationRepository(pool)
-	apiKeyGen := regpg.NewAPIKeyGeneratorAdapter(apiKeyRepo)
+	apiKeyGen := regpg.NewAPIKeyGeneratorAdapter(c.apiKeyRepo)
 	regService := regapp.NewRegistrationService(
 		c.TenantService, apiKeyGen, regRepo,
 		c.Logger.With("component", "registration"),
@@ -270,7 +358,8 @@ func NewContainer(ctx context.Context) (*Container, error) {
 		CORSOrigins:   cfg.HTTP.CORSOrigins,
 		RateLimitRPS:  cfg.HTTP.RateLimitRPS,
 		AuthEnabled:   cfg.Auth.Enabled,
-		AuthValidator: apiKeyRepo,
+		AuthValidator: c.apiKeyRepo,
+		RateLimiter:   server.NewRedisRateLimiter(redis.Client(), cfg.HTTP.RateLimitRPS),
 	}
 	c.Router = server.NewRouter(c.Logger.With("component", "http"), routerCfg)
 	c.registerRoutes()
@@ -286,6 +375,13 @@ func NewContainer(ctx context.Context) (*Container, error) {
 		cfg.HTTP.IdleTimeout,
 	)
 
+	// 17. Data retention cleanup job
+	c.CleanupJob = retention.NewCleanupJob(
+		pool, retention.DefaultPolicy(),
+		c.Logger.With("component", "retention"),
+	)
+	c.CleanupJob.Start(ctx, 6*time.Hour)
+
 	return c, nil
 }
 
@@ -295,15 +391,29 @@ func (c *Container) registerRoutes() {
 	c.Router.HandleFunc("GET /healthz", c.health.Liveness())
 	c.Router.HandleFunc("GET /readyz", c.health.Readiness())
 
+	// Prometheus metrics endpoint (no auth required)
+	c.Router.HandleFunc("GET /metrics", c.Metrics.Handler())
+
 	// API version info (no auth required)
 	c.Router.HandleFunc("GET /api/v1/info", c.infoHandler())
+
+	// Error codes catalog (no auth required)
+	c.Router.HandleFunc("GET /api/v1/error-codes", server.ErrorCodesHandler())
 
 	// Registration endpoint (no auth — this creates a new tenant + API key)
 	c.Router.HandleFunc("POST /api/v1/register", c.registrationHandler.Register)
 
+	// SSE event stream (authenticated)
+	c.Router.Mux().Handle("GET /api/v1/events/stream",
+		c.Router.AuthenticatedHandler(http.HandlerFunc(server.SSEHandler(c.SSEBroker, c.Logger.With("component", "sse-handler")))))
+
 	// Tenant domain routes (authenticated)
 	tenantHandler := tenantrest.NewHandler(c.TenantService, c.Logger.With("component", "tenant-api"))
 	tenantHandler.RegisterAuthenticatedRoutes(c.Router.Mux(), c.Router.AuthenticatedHandler)
+
+	// API key management routes (authenticated)
+	apiKeyHandler := tenantrest.NewAPIKeyHandler(c.apiKeyRepo, c.Logger.With("component", "apikey-api"))
+	apiKeyHandler.RegisterAuthenticatedRoutes(c.Router.Mux(), c.Router.AuthenticatedHandler)
 
 	// Health monitoring routes (authenticated)
 	healthHandler := healthrest.NewHandler(c.HealthService, c.Logger.With("component", "health-api"))
@@ -368,6 +478,11 @@ func (c *Container) Shutdown(ctx context.Context) {
 	// Stop scheduler first
 	if c.Scheduler != nil {
 		c.Scheduler.Stop()
+	}
+
+	// Stop cleanup job
+	if c.CleanupJob != nil {
+		c.CleanupJob.Stop()
 	}
 
 	// Shutdown HTTP server (stop accepting new requests)

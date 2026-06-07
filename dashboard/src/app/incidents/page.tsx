@@ -5,36 +5,17 @@ import { useState } from "react";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { IncidentList } from "@/components/incidents/incident-list";
+import { ListSkeleton, QueryError } from "@/components/ui/loading";
+import { useIncidents, useAcknowledgeIncident, useResolveIncident, useTriggerAnalysis } from "@/lib/hooks";
 import type { Incident } from "@/lib/types";
 import { Brain, CheckCircle2, Clock, MessageSquare, Users } from "lucide-react";
 
-const mockIncidents: Incident[] = [
-  {
-    id: "inc-001", tenant_id: "t-001", component_id: "comp-001", rule_id: "rule-001",
-    title: "PostgreSQL connection pool exhausted",
-    description: "Connection pool utilization exceeded 95% on prod-db-primary. Active connections: 24/25. Queries queuing.",
-    severity: "critical", status: "investigating",
-    occurred_at: "2026-06-02T20:00:00.000Z", version: 3,
-  },
-  {
-    id: "inc-002", tenant_id: "t-001", component_id: "comp-002", rule_id: "rule-002",
-    title: "Redis cache hit ratio below threshold",
-    description: "Cache hit ratio dropped from 94% to 62% over the last 15 minutes. Eviction rate spiked.",
-    severity: "warning", status: "open",
-    occurred_at: "2026-06-02T19:20:00.000Z", version: 1,
-  },
-  {
-    id: "inc-003", tenant_id: "t-001", component_id: "comp-003", rule_id: "rule-003",
-    title: "API response latency spike (P99 > 2s)",
-    description: "Backend API P99 latency increased to 2.4s. Correlated with database pool saturation.",
-    severity: "major", status: "acknowledged",
-    occurred_at: "2026-06-02T18:00:00.000Z",
-    acknowledged_at: "2026-06-02T18:20:00.000Z", version: 2,
-  },
-];
-
 export default function IncidentsPage() {
   const [selected, setSelected] = useState<Incident | null>(null);
+  const { data: incidents, isLoading, error, refetch } = useIncidents();
+  const acknowledgeMutation = useAcknowledgeIncident();
+  const resolveMutation = useResolveIncident();
+  const analysisMutation = useTriggerAnalysis();
 
   return (
     <div className="flex min-h-screen">
@@ -56,11 +37,17 @@ export default function IncidentsPage() {
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
             {/* Incident list */}
             <div className="lg:col-span-2">
-              <IncidentList
-                incidents={mockIncidents}
-                onSelect={setSelected}
-                selectedId={selected?.id}
-              />
+              {isLoading ? (
+                <ListSkeleton count={4} />
+              ) : error ? (
+                <QueryError error={error as Error} onRetry={() => refetch()} />
+              ) : (
+                <IncidentList
+                  incidents={incidents || []}
+                  onSelect={setSelected}
+                  selectedId={selected?.id}
+                />
+              )}
             </div>
 
             {/* Incident detail panel */}
@@ -120,17 +107,29 @@ export default function IncidentsPage() {
 
                   {/* Actions */}
                   <div className="flex gap-3">
-                    <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:opacity-90 transition-opacity">
+                    <button
+                      onClick={() => analysisMutation.mutate(selected.id)}
+                      disabled={analysisMutation.isPending}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+                    >
                       <Brain className="h-4 w-4" />
-                      Run AI Analysis
+                      {analysisMutation.isPending ? "Analyzing..." : "Run AI Analysis"}
                     </button>
-                    <button className="flex items-center gap-2 px-4 py-2 rounded-lg border border-card-border text-sm font-medium hover:bg-card-border transition-colors">
+                    <button
+                      onClick={() => acknowledgeMutation.mutate(selected.id)}
+                      disabled={acknowledgeMutation.isPending || selected.status === "acknowledged"}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg border border-card-border text-sm font-medium hover:bg-card-border transition-colors disabled:opacity-50"
+                    >
                       <CheckCircle2 className="h-4 w-4" />
                       Acknowledge
                     </button>
-                    <button className="flex items-center gap-2 px-4 py-2 rounded-lg border border-card-border text-sm font-medium hover:bg-card-border transition-colors">
+                    <button
+                      onClick={() => resolveMutation.mutate(selected.id)}
+                      disabled={resolveMutation.isPending || selected.status === "resolved"}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg border border-card-border text-sm font-medium hover:bg-card-border transition-colors disabled:opacity-50"
+                    >
                       <MessageSquare className="h-4 w-4" />
-                      Comment
+                      Resolve
                     </button>
                   </div>
                 </div>

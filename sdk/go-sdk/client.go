@@ -1,11 +1,15 @@
 package sdk
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"runtime"
+	"sync"
 	"time"
 )
 
@@ -55,10 +59,12 @@ func DefaultConfig() Config {
 
 // Client is the main SDK client for OPTRION.
 type Client struct {
-	config     Config
-	httpClient *http.Client
-	logger     *slog.Logger
-	stopCh     chan struct{}
+	config           Config
+	httpClient       *http.Client
+	logger           *slog.Logger
+	stopCh           chan struct{}
+	customCollectors map[string]MetricCollector
+	mu               sync.RWMutex
 }
 
 // NewClient creates a new OPTRION SDK client.
@@ -74,11 +80,32 @@ func NewClient(config Config) (*Client, error) {
 	}
 
 	return &Client{
-		config:     config,
-		httpClient: &http.Client{Timeout: 10 * time.Second},
-		logger:     config.Logger,
-		stopCh:     make(chan struct{}),
+		config:           config,
+		httpClient:       &http.Client{Timeout: 10 * time.Second},
+		logger:           config.Logger,
+		stopCh:           make(chan struct{}),
+		customCollectors: make(map[string]MetricCollector),
 	}, nil
+}
+
+// registrationRequest is the payload sent to the server during registration.
+type registrationRequest struct {
+	TenantID      string `json:"tenant_id"`
+	ProductID     string `json:"product_id"`
+	EnvironmentID string `json:"environment_id"`
+	Hostname      string `json:"hostname"`
+	GoVersion     string `json:"go_version"`
+	OS            string `json:"os"`
+	Arch          string `json:"arch"`
+}
+
+// metricsPayload is the payload sent to the server with collected metrics.
+type metricsPayload struct {
+	TenantID      string                 `json:"tenant_id"`
+	ProductID     string                 `json:"product_id"`
+	EnvironmentID string                 `json:"environment_id"`
+	Timestamp     time.Time              `json:"timestamp"`
+	Metrics       map[string]interface{} `json:"metrics"`
 }
 
 // Register registers the application with OPTRION platform.
@@ -89,8 +116,18 @@ func (c *Client) Register(ctx context.Context) error {
 		"product", c.config.ProductID,
 	)
 
-	// TODO: Send registration request to server
-	// This would call POST /api/v1/register with application metadata
+	payload := registrationRequest{
+		TenantID:      c.config.TenantID,
+		ProductID:     c.config.ProductID,
+		EnvironmentID: c.config.EnvironmentID,
+		GoVersion:     runtime.Version(),
+		OS:            runtime.GOOS,
+		Arch:          runtime.GOARCH,
+	}
+
+	if err := c.doPost(ctx, "/api/v1/register", payload); err != nil {
+		return fmt.Errorf("registration failed: %w", err)
+	}
 
 	c.logger.InfoContext(ctx, "successfully registered with OPTRION")
 	return nil
@@ -139,8 +176,31 @@ func (c *Client) metricsCollectionLoop(ctx context.Context) {
 func (c *Client) collectAndSendMetrics(ctx context.Context) error {
 	metrics := c.collectMetrics()
 
-	// TODO: Send metrics to server
-	// This would call POST /api/v1/metrics with collected metrics
+	// Collect from custom collectors
+	c.mu.RLock()
+	for name, collector := range c.customCollectors {
+		customMetrics, err := collector.Collect(ctx)
+		if err != nil {
+			c.logger.WarnContext(ctx, "custom collector failed", "name", name, "error", err)
+			continue
+		}
+		for k, v := range customMetrics {
+			metrics[fmt.Sprintf("%s.%s", name, k)] = v
+		}
+	}
+	c.mu.RUnlock()
+
+	payload := metricsPayload{
+		TenantID:      c.config.TenantID,
+		ProductID:     c.config.ProductID,
+		EnvironmentID: c.config.EnvironmentID,
+		Timestamp:     time.Now().UTC(),
+		Metrics:       metrics,
+	}
+
+	if err := c.doPost(ctx, "/api/v1/metrics", payload); err != nil {
+		return fmt.Errorf("sending metrics: %w", err)
+	}
 
 	c.logger.DebugContext(ctx, "metrics collected and sent",
 		"metric_count", len(metrics),
@@ -155,21 +215,24 @@ func (c *Client) collectMetrics() map[string]interface{} {
 	runtime.ReadMemStats(&m)
 
 	return map[string]interface{}{
-		"timestamp":       time.Now().UTC(),
-		"memory_alloc":    m.Alloc,
-		"memory_total":    m.TotalAlloc,
-		"memory_sys":      m.Sys,
-		"goroutines":      runtime.NumGoroutine(),
-		"gc_runs":         m.NumGC,
+		"timestamp":      time.Now().UTC(),
+		"memory_alloc":   m.Alloc,
+		"memory_total":   m.TotalAlloc,
+		"memory_sys":     m.Sys,
+		"goroutines":     runtime.NumGoroutine(),
+		"gc_runs":        m.NumGC,
+		"gc_pause_total": m.PauseTotalNs,
+		"heap_objects":   m.HeapObjects,
+		"heap_inuse":     m.HeapInuse,
 	}
 }
 
 // HealthStatus represents the health status of the application.
 type HealthStatus struct {
-	Status      string                 `json:"status"`
-	Timestamp   time.Time              `json:"timestamp"`
-	Components  map[string]interface{} `json:"components"`
-	Metrics     map[string]interface{} `json:"metrics"`
+	Status     string                 `json:"status"`
+	Timestamp  time.Time              `json:"timestamp"`
+	Components map[string]interface{} `json:"components"`
+	Metrics    map[string]interface{} `json:"metrics"`
 }
 
 // GetHealth returns the current health status.
@@ -190,7 +253,17 @@ func (c *Client) GetHealth(ctx context.Context) (*HealthStatus, error) {
 
 // RegisterMetricCollector registers a custom metric collector.
 func (c *Client) RegisterMetricCollector(name string, collector MetricCollector) error {
-	// TODO: Implement custom metric collector registration
+	if name == "" {
+		return fmt.Errorf("collector name is required")
+	}
+	if collector == nil {
+		return fmt.Errorf("collector cannot be nil")
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.customCollectors[name] = collector
 	c.logger.InfoContext(context.Background(), "metric collector registered", "name", name)
 	return nil
 }
@@ -202,4 +275,36 @@ type MetricCollector interface {
 
 	// Name returns the collector name.
 	Name() string
+}
+
+// doPost sends a POST request with JSON body to the OPTRION server.
+func (c *Client) doPost(ctx context.Context, path string, payload interface{}) error {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshaling payload: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.config.Endpoint+path, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("creating request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.config.APIKey)
+	req.Header.Set("User-Agent", "optrion-go-sdk/1.0.0")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("sending request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Discard body to allow connection reuse
+	io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
+
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("server returned status %d", resp.StatusCode)
+	}
+
+	return nil
 }

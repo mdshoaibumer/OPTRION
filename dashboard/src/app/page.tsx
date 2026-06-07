@@ -7,182 +7,194 @@ import { StatsCards } from "@/components/dashboard/stats-cards";
 import { HealthScoreRing } from "@/components/health/health-score-ring";
 import { IncidentList } from "@/components/incidents/incident-list";
 import { AlertFeed } from "@/components/alerts/alert-feed";
+import { StatsSkeleton, ListSkeleton, QueryError } from "@/components/ui/loading";
+import { useDashboardStats, useIncidents, useAlerts } from "@/lib/hooks";
 import type { DashboardStats, Incident, Alert } from "@/lib/types";
+import { Sparkline } from "@/components/ui/sparkline";
 
-// Mock data for initial render (replaced by API calls with TanStack Query)
-const mockStats: DashboardStats = {
-  total_components: 6,
-  healthy_components: 4,
-  degraded_components: 1,
-  unhealthy_components: 1,
-  open_incidents: 2,
-  active_alerts: 3,
-  average_health_score: 78,
+const pageTransition = {
+  initial: { opacity: 0, y: 8 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] },
 };
 
-const mockIncidents: Incident[] = [
-  {
-    id: "inc-001",
-    tenant_id: "t-001",
-    component_id: "comp-001",
-    rule_id: "rule-001",
-    title: "PostgreSQL connection pool exhausted",
-    description: "Connection pool utilization exceeded 95%",
-    severity: "critical",
-    status: "investigating",
-    occurred_at: "2026-06-02T20:00:00.000Z",
-    version: 3,
-  },
-  {
-    id: "inc-002",
-    tenant_id: "t-001",
-    component_id: "comp-002",
-    rule_id: "rule-002",
-    title: "Redis cache hit ratio below threshold",
-    description: "Cache hit ratio dropped to 62%",
-    severity: "warning",
-    status: "open",
-    occurred_at: "2026-06-02T19:20:00.000Z",
-    version: 1,
-  },
-  {
-    id: "inc-003",
-    tenant_id: "t-001",
-    component_id: "comp-003",
-    rule_id: "rule-003",
-    title: "API response latency spike (P99 > 2s)",
-    description: "Backend API P99 latency increased to 2.4s",
-    severity: "major",
-    status: "acknowledged",
-    occurred_at: "2026-06-02T18:00:00.000Z",
-    acknowledged_at: "2026-06-02T18:20:00.000Z",
-    version: 2,
-  },
-];
+const staggerContainer = {
+  animate: { transition: { staggerChildren: 0.08 } },
+};
 
-const mockAlerts: Alert[] = [
-  {
-    id: "alert-001",
-    tenant_id: "t-001",
-    incident_id: "inc-001",
-    rule_id: "rule-001",
-    severity: "critical",
-    status: "delivered",
-    title: "CRITICAL: PostgreSQL pool exhausted",
-    message: "Connection pool on prod-db-primary has exceeded 95% capacity. Immediate action required.",
-    created_at: "2026-06-02T20:00:00.000Z",
-    delivered_at: "2026-06-02T20:00:10.000Z",
-  },
-  {
-    id: "alert-002",
-    tenant_id: "t-001",
-    incident_id: "inc-003",
-    rule_id: "rule-003",
-    severity: "major",
-    status: "delivered",
-    title: "MAJOR: API latency exceeds SLO",
-    message: "P99 latency for /api/v1/members endpoint is 2.4s (SLO: 1s)",
-    created_at: "2026-06-02T18:00:00.000Z",
-    delivered_at: "2026-06-02T18:00:05.000Z",
-  },
-  {
-    id: "alert-003",
-    tenant_id: "t-001",
-    incident_id: "inc-002",
-    rule_id: "rule-002",
-    severity: "warning",
-    status: "pending",
-    title: "WARNING: Redis cache degraded",
-    message: "Cache hit ratio below 80% threshold",
-    created_at: "2026-06-02T19:20:00.000Z",
-  },
-];
+const staggerItem = {
+  initial: { opacity: 0, y: 16 },
+  animate: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] } },
+};
 
 export default function DashboardPage() {
+  const { data: stats, isLoading: statsLoading, error: statsError, refetch: refetchStats } = useDashboardStats();
+  const { data: incidents, isLoading: incidentsLoading, error: incidentsError } = useIncidents({ limit: 5 });
+  const { data: alerts, isLoading: alertsLoading, error: alertsError } = useAlerts();
+
+  const displayStats: DashboardStats = stats || {
+    total_components: 0, healthy_components: 0, degraded_components: 0,
+    unhealthy_components: 0, open_incidents: 0, active_alerts: 0, average_health_score: 0,
+  };
+
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen noise-overlay">
       <Sidebar />
       <div className="flex-1 ml-16 lg:ml-64">
         <Header />
-        <main className="p-6 space-y-6">
+        <main className="p-6 lg:p-8 space-y-8 dot-grid-bg min-h-[calc(100vh-4rem)]">
           {/* Page title */}
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <h1 className="text-2xl font-bold">Engineering Intelligence</h1>
+          <motion.div {...pageTransition}>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold tracking-tight">Engineering Intelligence</h1>
+              <motion.div
+                className="h-2 w-2 rounded-full bg-success"
+                animate={{ opacity: [1, 0.4, 1] }}
+                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+              />
+            </div>
             <p className="text-sm text-muted mt-1">
               Real-time health monitoring and incident detection
             </p>
           </motion.div>
 
-          {/* Stats row */}
-          <StatsCards stats={mockStats} />
+          {/* Stats row — Bento Grid */}
+          {statsLoading ? (
+            <StatsSkeleton />
+          ) : statsError ? (
+            <QueryError error={statsError as Error} onRetry={() => refetchStats()} />
+          ) : (
+            <StatsCards stats={displayStats} />
+          )}
 
           {/* Main content grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <motion.div
+            variants={staggerContainer}
+            initial="initial"
+            animate="animate"
+            className="grid grid-cols-1 lg:grid-cols-3 gap-6"
+          >
             {/* Health Overview */}
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="lg:col-span-1 rounded-xl border border-card-border bg-card p-6"
+              variants={staggerItem}
+              className="lg:col-span-1 rounded-2xl border border-(--glass-border) bg-card p-6 gradient-border group"
             >
-              <h2 className="text-sm font-semibold mb-6">System Health</h2>
-              <div className="flex flex-col items-center">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-sm font-semibold">System Health</h2>
+                <div className="flex items-center gap-1.5">
+                  <Sparkline width={48} height={16} color="var(--success)" />
+                </div>
+              </div>
+              <div className="flex flex-col items-center py-4">
                 <HealthScoreRing
-                  score={mockStats.average_health_score}
+                  score={displayStats.average_health_score}
                   status={
-                    mockStats.average_health_score >= 80
+                    displayStats.average_health_score >= 80
                       ? "healthy"
-                      : mockStats.average_health_score >= 50
+                      : displayStats.average_health_score >= 50
                       ? "degraded"
                       : "unhealthy"
                   }
                   size="lg"
                   label="Overall Score"
                 />
-                <div className="grid grid-cols-3 gap-6 mt-8 w-full">
-                  <HealthScoreRing score={95} status="healthy" size="sm" label="API" />
-                  <HealthScoreRing score={62} status="degraded" size="sm" label="DB" />
-                  <HealthScoreRing score={88} status="healthy" size="sm" label="Cache" />
+              </div>
+              {/* Component breakdown bar */}
+              <div className="mt-6 pt-4 border-t border-(--glass-border)">
+                <div className="flex items-center justify-between text-xs text-muted mb-2">
+                  <span>Component Status</span>
+                  <span className="font-mono">{displayStats.total_components} total</span>
+                </div>
+                <div className="flex h-2 rounded-full overflow-hidden bg-background">
+                  {displayStats.total_components > 0 && (
+                    <>
+                      <motion.div
+                        className="h-full bg-success"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${(displayStats.healthy_components / displayStats.total_components) * 100}%` }}
+                        transition={{ duration: 1, delay: 0.5, ease: "easeOut" }}
+                      />
+                      <motion.div
+                        className="h-full bg-warning"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${(displayStats.degraded_components / displayStats.total_components) * 100}%` }}
+                        transition={{ duration: 1, delay: 0.7, ease: "easeOut" }}
+                      />
+                      <motion.div
+                        className="h-full bg-danger"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${(displayStats.unhealthy_components / displayStats.total_components) * 100}%` }}
+                        transition={{ duration: 1, delay: 0.9, ease: "easeOut" }}
+                      />
+                    </>
+                  )}
+                </div>
+                <div className="flex items-center gap-4 mt-2 text-[10px] text-muted">
+                  <span className="flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-full bg-success" />Healthy
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-full bg-warning" />Degraded
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-full bg-danger" />Unhealthy
+                  </span>
                 </div>
               </div>
             </motion.div>
 
             {/* Incidents */}
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="lg:col-span-1 rounded-xl border border-card-border bg-card p-6"
+              variants={staggerItem}
+              className="lg:col-span-1 rounded-2xl border border-(--glass-border) bg-card p-6 gradient-border"
             >
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-sm font-semibold">Active Incidents</h2>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 font-mono">
-                  {mockIncidents.filter((i) => i.status !== "resolved" && i.status !== "closed").length}
-                </span>
+                {incidents && (
+                  <motion.span
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    className="text-xs px-2.5 py-1 rounded-full bg-red-500/10 text-red-400 font-mono border border-red-500/20"
+                  >
+                    {incidents.filter((i) => i.status !== "resolved" && i.status !== "closed").length}
+                  </motion.span>
+                )}
               </div>
-              <IncidentList incidents={mockIncidents} />
+              {incidentsLoading ? (
+                <ListSkeleton count={3} />
+              ) : incidentsError ? (
+                <QueryError error={incidentsError as Error} />
+              ) : (
+                <IncidentList incidents={incidents || []} />
+              )}
             </motion.div>
 
             {/* Alert Feed */}
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              className="lg:col-span-1 rounded-xl border border-card-border bg-card p-6"
+              variants={staggerItem}
+              className="lg:col-span-1 rounded-2xl border border-(--glass-border) bg-card p-6 gradient-border"
             >
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-sm font-semibold">Alert Feed</h2>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 font-mono">
-                  {mockAlerts.length}
-                </span>
+                {alerts && (
+                  <motion.span
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    className="text-xs px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-400 font-mono border border-amber-500/20"
+                  >
+                    {alerts.length}
+                  </motion.span>
+                )}
               </div>
-              <AlertFeed alerts={mockAlerts} />
+              {alertsLoading ? (
+                <ListSkeleton count={3} />
+              ) : alertsError ? (
+                <QueryError error={alertsError as Error} />
+              ) : (
+                <AlertFeed alerts={alerts || []} />
+              )}
             </motion.div>
-          </div>
+          </motion.div>
         </main>
       </div>
     </div>

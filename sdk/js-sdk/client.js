@@ -50,12 +50,14 @@ class Client {
       headers: {
         'Authorization': `Bearer ${config.apiKey}`,
         'Content-Type': 'application/json',
+        'User-Agent': 'optrion-js-sdk/1.0.0',
       },
       timeout: 10000,
     });
 
     this.metricsInterval = null;
     this.isRunning = false;
+    this.customCollectors = new Map();
   }
 
   /**
@@ -68,17 +70,20 @@ class Client {
     });
 
     try {
-      // TODO: Send registration request to server
-      // const response = await this.httpClient.post('/api/v1/register', {
-      //   tenant_id: this.config.tenantId,
-      //   product_id: this.config.productId,
-      //   environment_id: this.config.environmentId,
-      // });
+      await this.httpClient.post('/api/v1/register', {
+        tenant_id: this.config.tenantId,
+        product_id: this.config.productId,
+        environment_id: this.config.environmentId,
+        hostname: os.hostname(),
+        node_version: process.version,
+        platform: process.platform,
+        arch: process.arch,
+      });
 
       this.config.logger.log('Successfully registered with OPTRION');
       return true;
     } catch (error) {
-      this.config.logger.error('Registration failed', error);
+      this.config.logger.error('Registration failed', error.message || error);
       throw error;
     }
   }
@@ -134,16 +139,33 @@ class Client {
     try {
       const metrics = this.collectMetrics();
 
-      // TODO: Send metrics to server
-      // await this.httpClient.post('/api/v1/metrics', metrics);
+      // Collect custom metrics
+      for (const [name, collector] of this.customCollectors) {
+        try {
+          const customMetrics = await collector.collect();
+          for (const [key, value] of Object.entries(customMetrics)) {
+            metrics[`${name}.${key}`] = value;
+          }
+        } catch (err) {
+          this.config.logger.warn(`Custom collector '${name}' failed`, err.message || err);
+        }
+      }
 
-      this.config.logger.debug('Metrics collected and sent', {
+      await this.httpClient.post('/api/v1/metrics', {
+        tenant_id: this.config.tenantId,
+        product_id: this.config.productId,
+        environment_id: this.config.environmentId,
+        timestamp: new Date().toISOString(),
+        metrics,
+      });
+
+      this.config.logger.debug && this.config.logger.debug('Metrics collected and sent', {
         metric_count: Object.keys(metrics).length,
       });
 
       return metrics;
     } catch (error) {
-      this.config.logger.error('Failed to collect metrics', error);
+      this.config.logger.error('Failed to send metrics', error.message || error);
     }
   }
 
@@ -178,6 +200,7 @@ class Client {
         cpuCount: os.cpus().length,
         totalMemory: os.totalmem(),
         freeMemory: os.freemem(),
+        loadAverage: os.loadavg(),
       },
     };
   }
@@ -197,9 +220,18 @@ class Client {
 
   /**
    * Register a custom metric collector
+   * @param {string} name - Unique name for the collector
+   * @param {{ collect: () => Promise<object> | object }} collector - Object with a collect() method
    */
   registerMetricCollector(name, collector) {
-    // TODO: Implement custom metric collector registration
+    if (!name || typeof name !== 'string') {
+      throw new Error('Collector name must be a non-empty string');
+    }
+    if (!collector || typeof collector.collect !== 'function') {
+      throw new Error('Collector must have a collect() method');
+    }
+
+    this.customCollectors.set(name, collector);
     this.config.logger.log('Metric collector registered', { name });
   }
 
@@ -208,10 +240,10 @@ class Client {
    */
   async validate() {
     try {
-      const response = await this.httpClient.get('/health');
+      const response = await this.httpClient.get('/healthz');
       return response.status === 200;
     } catch (error) {
-      this.config.logger.error('Connection validation failed', error);
+      this.config.logger.error('Connection validation failed', error.message || error);
       return false;
     }
   }

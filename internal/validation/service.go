@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/optrion/optrion/internal/tenant/domain"
@@ -33,26 +36,26 @@ func NewValidationService(
 
 // ValidationReport represents the results of an integration validation.
 type ValidationReport struct {
-	TenantID              string
-	RegistrationTime      time.Time
-	ComponentsRegistered  int
-	ComponentsHealthy     int
-	MetricsFlowing        bool
-	LastMetricsReceived   time.Time
-	AverageResponseTime   time.Duration
-	HealthChecksPassed    int
-	HealthChecksFailed    int
-	IntegrationStatus     string
-	Issues                []ValidationIssue
-	Recommendations       []string
+	TenantID             string
+	RegistrationTime     time.Time
+	ComponentsRegistered int
+	ComponentsHealthy    int
+	MetricsFlowing       bool
+	LastMetricsReceived  time.Time
+	AverageResponseTime  time.Duration
+	HealthChecksPassed   int
+	HealthChecksFailed   int
+	IntegrationStatus    string
+	Issues               []ValidationIssue
+	Recommendations      []string
 }
 
 // ValidationIssue represents a validation issue found during verification.
 type ValidationIssue struct {
-	Severity string // "info", "warning", "error"
+	Severity  string // "info", "warning", "error"
 	Component string
-	Message  string
-	Details  string
+	Message   string
+	Details   string
 }
 
 // ValidateIntegration performs a comprehensive integration validation.
@@ -159,18 +162,85 @@ func (vs *ValidationService) ValidateIntegration(ctx context.Context, tenantID s
 	return report, nil
 }
 
-// checkComponentHealth performs a health check on a component.
+// checkComponentHealth performs a health check on a component based on its kind.
 func (vs *ValidationService) checkComponentHealth(ctx context.Context, comp *domain.Component) (bool, time.Duration, error) {
-	// TODO: Implement actual health check based on component kind and endpoint
-	// For now, return a placeholder
-	return true, 100 * time.Millisecond, nil
+	if comp.EndpointURL == "" {
+		return false, 0, fmt.Errorf("component %s has no endpoint configured", comp.Name)
+	}
+
+	start := time.Now()
+
+	switch comp.Kind {
+	case domain.KindDatabase:
+		// For databases, try TCP connection to the endpoint
+		return vs.checkTCPConnectivity(ctx, comp.EndpointURL, start)
+	case domain.KindCache:
+		// For cache (Redis), try TCP connection
+		return vs.checkTCPConnectivity(ctx, comp.EndpointURL, start)
+	case domain.KindAPI, domain.KindWeb, domain.KindService, domain.KindExternal:
+		// For HTTP-based components, do HTTP GET health check
+		return vs.checkHTTPHealth(ctx, comp.EndpointURL, start)
+	default:
+		// For unknown kinds, try HTTP first then TCP
+		healthy, dur, err := vs.checkHTTPHealth(ctx, comp.EndpointURL, start)
+		if err == nil {
+			return healthy, dur, nil
+		}
+		return vs.checkTCPConnectivity(ctx, comp.EndpointURL, start)
+	}
+}
+
+// checkHTTPHealth performs an HTTP health check.
+func (vs *ValidationService) checkHTTPHealth(ctx context.Context, endpoint string, start time.Time) (bool, time.Duration, error) {
+	client := &http.Client{Timeout: 5 * time.Second}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return false, time.Since(start), fmt.Errorf("creating request: %w", err)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return false, time.Since(start), err
+	}
+	defer resp.Body.Close()
+
+	duration := time.Since(start)
+	return resp.StatusCode >= 200 && resp.StatusCode < 400, duration, nil
+}
+
+// checkTCPConnectivity performs a TCP dial check for database/cache endpoints.
+func (vs *ValidationService) checkTCPConnectivity(ctx context.Context, endpoint string, start time.Time) (bool, time.Duration, error) {
+	// Extract host:port from various URI schemes
+	host := extractHostPort(endpoint)
+	if host == "" {
+		return false, 0, fmt.Errorf("cannot extract host:port from endpoint: %s", endpoint)
+	}
+
+	dialer := &net.Dialer{Timeout: 5 * time.Second}
+	conn, err := dialer.DialContext(ctx, "tcp", host)
+	if err != nil {
+		return false, time.Since(start), err
+	}
+	conn.Close()
+
+	return true, time.Since(start), nil
 }
 
 // checkMetricsFlow checks if metrics are being received from the application.
 func (vs *ValidationService) checkMetricsFlow(ctx context.Context, tenantID string) (bool, time.Time, error) {
-	// TODO: Query metrics store to verify recent metrics from tenant
-	// Return (metricsFlowing, lastReceived, error)
-	return true, time.Now().UTC(), nil
+	results, err := vs.health.ListByTenant(ctx, tenantID, 1)
+	if err != nil {
+		return false, time.Time{}, fmt.Errorf("querying health checks: %w", err)
+	}
+
+	if len(results) == 0 {
+		return false, time.Time{}, nil
+	}
+
+	latest := results[0]
+	// Consider metrics flowing if the last check was within the last 5 minutes
+	isFlowing := time.Since(latest.CheckedAt) < 5*time.Minute
+	return isFlowing, latest.CheckedAt, nil
 }
 
 // ValidateComponentConnectivity checks if a component endpoint is reachable.
@@ -238,4 +308,40 @@ Issues:
 	}
 
 	return output
+}
+
+// extractHostPort extracts host:port from various URI formats.
+// Handles: postgres://host:port/db, redis://host:port, host:port, http://host:port
+func extractHostPort(endpoint string) string {
+	// Try parsing as URL first
+	u, err := url.Parse(endpoint)
+	if err == nil && u.Host != "" {
+		host := u.Hostname()
+		port := u.Port()
+		if port == "" {
+			// Infer default ports from scheme
+			switch strings.ToLower(u.Scheme) {
+			case "postgres", "postgresql":
+				port = "5432"
+			case "redis":
+				port = "6379"
+			case "http":
+				port = "80"
+			case "https":
+				port = "443"
+			case "mysql":
+				port = "3306"
+			default:
+				return ""
+			}
+		}
+		return net.JoinHostPort(host, port)
+	}
+
+	// If it looks like host:port already
+	if _, _, err := net.SplitHostPort(endpoint); err == nil {
+		return endpoint
+	}
+
+	return ""
 }

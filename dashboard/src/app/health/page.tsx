@@ -4,62 +4,14 @@ import { motion } from "framer-motion";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { HealthScoreRing } from "@/components/health/health-score-ring";
+import { CardSkeleton, QueryError } from "@/components/ui/loading";
+import { useComponents } from "@/lib/hooks";
 import { Activity, TrendingDown, TrendingUp } from "lucide-react";
-
-interface ComponentHealth {
-  id: string;
-  name: string;
-  kind: string;
-  score: number;
-  status: "healthy" | "degraded" | "unhealthy" | "unknown";
-  trend: "up" | "down" | "stable";
-  metrics: { name: string; value: string; status: "ok" | "warn" | "crit" }[];
-}
-
-const mockHealth: ComponentHealth[] = [
-  {
-    id: "c1", name: "Backend API", kind: "api", score: 95, status: "healthy", trend: "stable",
-    metrics: [
-      { name: "Latency P99", value: "245ms", status: "ok" },
-      { name: "Error Rate", value: "0.02%", status: "ok" },
-      { name: "Throughput", value: "1.2k rps", status: "ok" },
-    ],
-  },
-  {
-    id: "c2", name: "PostgreSQL Primary", kind: "database", score: 62, status: "degraded", trend: "down",
-    metrics: [
-      { name: "Connections", value: "24/25", status: "crit" },
-      { name: "Query Latency", value: "450ms", status: "warn" },
-      { name: "Deadlocks", value: "0", status: "ok" },
-    ],
-  },
-  {
-    id: "c3", name: "Redis Cache", kind: "cache", score: 88, status: "healthy", trend: "up",
-    metrics: [
-      { name: "Hit Ratio", value: "94%", status: "ok" },
-      { name: "Memory", value: "62%", status: "ok" },
-      { name: "Evictions", value: "12/min", status: "ok" },
-    ],
-  },
-  {
-    id: "c4", name: "Redis Sessions", kind: "cache", score: 28, status: "unhealthy", trend: "down",
-    metrics: [
-      { name: "Hit Ratio", value: "34%", status: "crit" },
-      { name: "Memory", value: "96%", status: "crit" },
-      { name: "Evictions", value: "2.4k/min", status: "crit" },
-    ],
-  },
-  {
-    id: "c5", name: "NGINX Proxy", kind: "server", score: 99, status: "healthy", trend: "stable",
-    metrics: [
-      { name: "CPU", value: "12%", status: "ok" },
-      { name: "RAM", value: "34%", status: "ok" },
-      { name: "Active Conns", value: "847", status: "ok" },
-    ],
-  },
-];
+import type { HealthStatus } from "@/lib/types";
 
 export default function HealthPage() {
+  const { data: components, isLoading, error, refetch } = useComponents();
+
   return (
     <div className="flex min-h-screen">
       <Sidebar />
@@ -76,75 +28,93 @@ export default function HealthPage() {
             </p>
           </motion.div>
 
-          {/* Component health cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {mockHealth.map((comp, idx) => (
-              <motion.div
-                key={comp.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.05 }}
-                className="rounded-xl border border-card-border bg-card p-5"
-              >
-                {/* Component header */}
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="text-sm font-semibold">{comp.name}</h3>
-                    <span className="text-[10px] uppercase tracking-wider text-muted">
-                      {comp.kind}
-                    </span>
-                  </div>
-                  <HealthScoreRing
-                    score={comp.score}
-                    status={comp.status}
-                    size="sm"
-                    animate={false}
-                  />
-                </div>
+          {isLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <CardSkeleton key={i} />
+              ))}
+            </div>
+          ) : error ? (
+            <QueryError error={error as Error} onRetry={() => refetch()} />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {(components || []).map((comp, idx) => {
+                const status: HealthStatus = comp.health_score >= 80
+                  ? "healthy"
+                  : comp.health_score >= 50
+                  ? "degraded"
+                  : "unhealthy";
 
-                {/* Trend indicator */}
-                <div className="flex items-center gap-1 mb-4">
-                  {comp.trend === "up" && (
-                    <TrendingUp className="h-3.5 w-3.5 text-success" />
-                  )}
-                  {comp.trend === "down" && (
-                    <TrendingDown className="h-3.5 w-3.5 text-danger" />
-                  )}
-                  {comp.trend === "stable" && (
-                    <Activity className="h-3.5 w-3.5 text-muted" />
-                  )}
-                  <span className="text-[10px] text-muted capitalize">
-                    {comp.trend} trend
-                  </span>
-                </div>
+                return (
+                  <motion.div
+                    key={comp.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: idx * 0.05 }}
+                    className="rounded-xl border border-card-border bg-card p-5"
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h3 className="text-sm font-semibold">{comp.name}</h3>
+                        <span className="text-[10px] uppercase tracking-wider text-muted">
+                          {comp.kind}
+                        </span>
+                      </div>
+                      <HealthScoreRing
+                        score={comp.health_score}
+                        status={status}
+                        size="sm"
+                        animate={false}
+                      />
+                    </div>
 
-                {/* Metrics */}
-                <div className="space-y-2">
-                  {comp.metrics.map((metric) => (
-                    <div
-                      key={metric.name}
-                      className="flex items-center justify-between text-xs"
-                    >
-                      <span className="text-muted">{metric.name}</span>
-                      <span
-                        className="font-mono font-medium"
-                        style={{
-                          color:
-                            metric.status === "ok"
-                              ? "var(--foreground)"
-                              : metric.status === "warn"
-                              ? "var(--warning)"
-                              : "var(--danger)",
-                        }}
-                      >
-                        {metric.value}
+                    <div className="flex items-center gap-1 mb-4">
+                      {status === "healthy" && (
+                        <TrendingUp className="h-3.5 w-3.5 text-success" />
+                      )}
+                      {status === "unhealthy" && (
+                        <TrendingDown className="h-3.5 w-3.5 text-danger" />
+                      )}
+                      {status === "degraded" && (
+                        <Activity className="h-3.5 w-3.5 text-muted" />
+                      )}
+                      <span className="text-[10px] text-muted capitalize">
+                        {status}
                       </span>
                     </div>
-                  ))}
-                </div>
-              </motion.div>
-            ))}
-          </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted">Score</span>
+                        <span
+                          className="font-mono font-medium"
+                          style={{
+                            color: comp.health_score >= 80
+                              ? "var(--foreground)"
+                              : comp.health_score >= 50
+                              ? "var(--warning)"
+                              : "var(--danger)",
+                          }}
+                        >
+                          {comp.health_score}/100
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted">Status</span>
+                        <span className="font-mono font-medium capitalize">{comp.status}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted">Endpoint</span>
+                        <span className="font-mono font-medium text-muted truncate max-w-[140px]">
+                          {comp.endpoint_url || "—"}
+                        </span>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          )}
         </main>
       </div>
     </div>

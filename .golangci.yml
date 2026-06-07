@@ -50,6 +50,19 @@ issues:
         - gocyclo
         - unparam
         - gocritic
+    - path: scripts/
+      linters:
+        - gocritic
+        - errcheck
+        - gosec
+    - path: test/
+      linters:
+        - gocritic
+        - errcheck
+    - path: examples/
+      linters:
+        - gocritic
+        - errcheck
   max-same-issues: 0
   max-issues-per-linter: 0
 

@@ -421,7 +421,7 @@ type CreateComponentCmd struct {
 }
 
 // CreateComponent creates a component using a simplified command (delegates to RegisterComponent).
-func (s *TenantService) CreateComponent(ctx context.Context, cmd CreateComponentCmd) (*domain.Component, error) {
+func (s *TenantService) CreateComponent(ctx context.Context, cmd *CreateComponentCmd) (*domain.Component, error) {
 	// If TenantID/ProductID not provided, look them up from environment
 	tenantID := cmd.TenantID
 	productID := cmd.ProductID

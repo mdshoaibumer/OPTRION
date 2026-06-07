@@ -113,7 +113,7 @@ func TestE2E_RegistrationWorkflow(t *testing.T) {
 
 	// Verify error response does not leak internal details
 	var errResp map[string]string
-	json.NewDecoder(resp.Body).Decode(&errResp)
+	_ = json.NewDecoder(resp.Body).Decode(&errResp) //nolint:errcheck // test helper, decode failures caught by subsequent assertions
 	if errResp["error"] == "" {
 		t.Fatal("expected error message in response")
 	}

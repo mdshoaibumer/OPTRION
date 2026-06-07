@@ -125,7 +125,7 @@ func (rs *RegistrationService) Register(ctx context.Context, req domain.Registra
 			Port:          compReq.Port,
 		}
 
-		comp, err := rs.tenantService.CreateComponent(ctx, compCmd)
+		comp, err := rs.tenantService.CreateComponent(ctx, &compCmd)
 		if err != nil {
 			audit.MarkFailed(err)
 			if err := rs.auditRepository.CreateAudit(ctx, audit); err != nil {

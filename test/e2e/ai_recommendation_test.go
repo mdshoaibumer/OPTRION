@@ -303,7 +303,7 @@ func createAuthenticatedTenant(t *testing.T, env *testutil.TestEnv, name, slug s
 	}
 
 	var regResp map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&regResp)
+	_ = json.NewDecoder(resp.Body).Decode(&regResp) //nolint:errcheck // test helper, decode failures caught by subsequent assertions
 
 	tenantID, _ = regResp["tenant_id"].(string)
 	apiKey, _ = regResp["api_key"].(string)
@@ -334,7 +334,7 @@ func createProductAuth(t *testing.T, env *testutil.TestEnv, tenantID, name, slug
 	}
 
 	var data map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&data)
+	_ = json.NewDecoder(resp.Body).Decode(&data) //nolint:errcheck // test helper
 	return data["id"].(string)
 }
 
@@ -361,7 +361,7 @@ func createEnvironmentAuth(t *testing.T, env *testutil.TestEnv, tenantID, produc
 	}
 
 	var data map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&data)
+	_ = json.NewDecoder(resp.Body).Decode(&data) //nolint:errcheck // test helper
 	return data["id"].(string)
 }
 
@@ -389,6 +389,6 @@ func createComponentAuth(t *testing.T, env *testutil.TestEnv, tenantID, productI
 	}
 
 	var data map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&data)
+	_ = json.NewDecoder(resp.Body).Decode(&data) //nolint:errcheck // test helper
 	return data["id"].(string)
 }

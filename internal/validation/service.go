@@ -80,16 +80,17 @@ func (vs *ValidationService) ValidateIntegration(ctx context.Context, tenantID s
 	for _, comp := range comps {
 		// Check if component is healthy
 		healthy, responseTime, err := vs.checkComponentHealth(ctx, comp)
-		if err != nil {
+		switch {
+		case err != nil:
 			report.Issues = append(report.Issues, ValidationIssue{
 				Severity:  "warning",
 				Component: comp.Name,
 				Message:   fmt.Sprintf("Failed to check health: %v", err),
 			})
-		} else if healthy {
+		case healthy:
 			report.ComponentsHealthy++
 			report.AverageResponseTime += responseTime
-		} else {
+		default:
 			report.Issues = append(report.Issues, ValidationIssue{
 				Severity:  "error",
 				Component: comp.Name,
@@ -193,7 +194,7 @@ func (vs *ValidationService) checkComponentHealth(ctx context.Context, comp *dom
 // checkHTTPHealth performs an HTTP health check.
 func (vs *ValidationService) checkHTTPHealth(ctx context.Context, endpoint string, start time.Time) (bool, time.Duration, error) {
 	client := &http.Client{Timeout: 5 * time.Second}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, http.NoBody)
 	if err != nil {
 		return false, time.Since(start), fmt.Errorf("creating request: %w", err)
 	}
@@ -244,11 +245,11 @@ func (vs *ValidationService) checkMetricsFlow(ctx context.Context, tenantID stri
 }
 
 // ValidateComponentConnectivity checks if a component endpoint is reachable.
-func (vs *ValidationService) ValidateComponentConnectivity(ctx context.Context, endpoint string, port int) (bool, error) {
+func (vs *ValidationService) ValidateComponentConnectivity(_ context.Context, endpoint string, port int) (bool, error) {
 	client := &http.Client{Timeout: 5 * time.Second}
 	url := fmt.Sprintf("http://%s:%d/health", endpoint, port)
 
-	resp, err := client.Get(url)
+	resp, err := client.Get(url) //nolint:gosec // internal validation tool, URL is constructed from trusted inputs
 	if err != nil {
 		return false, err
 	}

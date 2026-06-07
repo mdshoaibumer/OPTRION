@@ -32,7 +32,7 @@ func main() {
 	log.Println("[playwright-server] Starting miniredis...")
 	mr, err := testutil.StartMiniRedis()
 	if err != nil {
-		pg.Stop()
+		_ = pg.Stop() //nolint:errcheck // best-effort cleanup on startup failure
 		log.Fatalf("Failed to start miniredis: %v", err)
 	}
 	mr.SetEnv()
@@ -57,7 +57,7 @@ func main() {
 	container, err := app.NewContainer(ctx)
 	if err != nil {
 		mr.Stop()
-		pg.Stop()
+		_ = pg.Stop() //nolint:errcheck // best-effort cleanup on startup failure
 		log.Fatalf("Failed to initialize application: %v", err)
 	}
 

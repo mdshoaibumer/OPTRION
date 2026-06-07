@@ -253,7 +253,7 @@ func listIncidents(t *testing.T, env *testutil.TestEnv, tenantID, apiKey string)
 	}
 
 	var result map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&result)
+	_ = json.NewDecoder(resp.Body).Decode(&result) //nolint:errcheck // test helper
 	data, ok := result["data"].([]interface{})
 	if !ok {
 		return nil
@@ -282,7 +282,7 @@ func doIncidentAction(t *testing.T, env *testutil.TestEnv, incidentID, action, a
 
 	if resp.StatusCode != http.StatusOK {
 		var errResp map[string]string
-		json.NewDecoder(resp.Body).Decode(&errResp)
+		_ = json.NewDecoder(resp.Body).Decode(&errResp) //nolint:errcheck // test helper
 		t.Fatalf("expected 200 for %s, got %d: %v", action, resp.StatusCode, errResp)
 	}
 }
@@ -298,7 +298,7 @@ func verifyIncidentStatus(t *testing.T, env *testutil.TestEnv, incidentID, apiKe
 	defer resp.Body.Close()
 
 	var incident map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&incident)
+	_ = json.NewDecoder(resp.Body).Decode(&incident) //nolint:errcheck // test helper
 	actual, _ := incident["status"].(string)
 	if actual != expectedStatus {
 		t.Fatalf("expected incident status %q, got %q", expectedStatus, actual)

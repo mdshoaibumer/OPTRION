@@ -68,7 +68,7 @@ type Client struct {
 }
 
 // NewClient creates a new OPTRION SDK client.
-func NewClient(config Config) (*Client, error) {
+func NewClient(config *Config) (*Client, error) {
 	if config.Endpoint == "" {
 		return nil, fmt.Errorf("endpoint is required")
 	}
@@ -80,7 +80,7 @@ func NewClient(config Config) (*Client, error) {
 	}
 
 	return &Client{
-		config:           config,
+		config:           *config,
 		httpClient:       &http.Client{Timeout: 10 * time.Second},
 		logger:           config.Logger,
 		stopCh:           make(chan struct{}),
@@ -236,7 +236,7 @@ type HealthStatus struct {
 }
 
 // GetHealth returns the current health status.
-func (c *Client) GetHealth(ctx context.Context) (*HealthStatus, error) {
+func (c *Client) GetHealth(_ context.Context) (*HealthStatus, error) {
 	m := runtime.MemStats{}
 	runtime.ReadMemStats(&m)
 
@@ -300,7 +300,7 @@ func (c *Client) doPost(ctx context.Context, path string, payload interface{}) e
 	defer resp.Body.Close()
 
 	// Discard body to allow connection reuse
-	io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
 
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("server returned status %d", resp.StatusCode)

@@ -51,7 +51,7 @@ func runWithEmbedded(m *testing.M) {
 	log.Println("Starting miniredis (no Docker)...")
 	mr, err := testutil.StartMiniRedis()
 	if err != nil {
-		pg.Stop()
+		_ = pg.Stop() //nolint:errcheck // best-effort cleanup on startup failure
 		log.Fatalf("failed to start miniredis: %v", err)
 	}
 	mr.SetEnv()

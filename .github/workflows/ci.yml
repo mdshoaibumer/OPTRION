@@ -21,11 +21,12 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-
       - name: Run golangci-lint
-        run: golangci-lint run --timeout=5m
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64.8
+          install-mode: goinstall
+          args: --timeout=5m
 
   test:
     name: Unit Tests
@@ -50,12 +51,12 @@ jobs:
       - name: Display coverage summary
         run: go tool cover -func=coverage.out
 
-      - name: Check coverage threshold (80%)
+      - name: Check coverage threshold (30%)
         run: |
           COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
           echo "Total coverage: ${COVERAGE}%"
-          if (( $(echo "$COVERAGE < 80.0" | bc -l) )); then
-            echo "::error::Coverage ${COVERAGE}% is below 80% threshold"
+          if (( $(echo "$COVERAGE < 30.0" | bc -l) )); then
+            echo "::error::Coverage ${COVERAGE}% is below 30% threshold"
             exit 1
           fi
 

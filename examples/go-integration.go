@@ -57,7 +57,7 @@ func main() {
 // initializeOPTRION sets up OPTRION monitoring for the application.
 func initializeOPTRION(ctx context.Context, logger *slog.Logger) error {
 	// Create OPTRION SDK client
-	client, err := sdk.NewClient(sdk.Config{
+	client, err := sdk.NewClient(&sdk.Config{
 		// OPTRION server endpoint
 		Endpoint: getEnv("OPTRION_ENDPOINT", "http://localhost:8080"),
 

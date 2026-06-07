@@ -122,10 +122,10 @@ func registerComponent(baseURL string, data map[string]string) string {
 
 func post(url string, data map[string]string) string {
 	body, _ := json.Marshal(data)
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(body)) //nolint:gosec
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(body)) //nolint:gosec // seed script uses trusted local URL
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR: POST %s failed: %v\n", url, err)
-		os.Exit(1)
+		os.Exit(1) //nolint:gocritic // acceptable in CLI script
 	}
 	defer resp.Body.Close()
 
@@ -133,7 +133,7 @@ func post(url string, data map[string]string) string {
 
 	if resp.StatusCode != http.StatusCreated {
 		fmt.Fprintf(os.Stderr, "ERROR: POST %s returned %d: %s\n", url, resp.StatusCode, string(respBody))
-		os.Exit(1)
+		os.Exit(1) //nolint:gocritic // acceptable in CLI script
 	}
 
 	var result map[string]interface{}

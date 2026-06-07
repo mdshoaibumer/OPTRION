@@ -57,7 +57,7 @@ func (m *mockTenantRepo) GetBySlug(_ context.Context, slug string) (*domain.Tena
 }
 
 func (m *mockTenantRepo) List(_ context.Context, _ port.TenantFilter) ([]*domain.Tenant, error) {
-	var result []*domain.Tenant
+	result := make([]*domain.Tenant, 0, len(m.tenants))
 	for _, t := range m.tenants {
 		result = append(result, t)
 	}
@@ -103,7 +103,7 @@ func (m *mockProductRepo) GetByID(_ context.Context, id string) (*domain.Product
 }
 
 func (m *mockProductRepo) ListByTenant(_ context.Context, _ string, _ port.ProductFilter) ([]*domain.Product, error) {
-	var result []*domain.Product
+	result := make([]*domain.Product, 0, len(m.products))
 	for _, p := range m.products {
 		result = append(result, p)
 	}
@@ -146,7 +146,7 @@ func (m *mockEnvironmentRepo) GetByID(_ context.Context, id string) (*domain.Env
 }
 
 func (m *mockEnvironmentRepo) ListByProduct(_ context.Context, _ string, _ port.EnvironmentFilter) ([]*domain.Environment, error) {
-	var result []*domain.Environment
+	result := make([]*domain.Environment, 0, len(m.environments))
 	for _, e := range m.environments {
 		result = append(result, e)
 	}
@@ -189,7 +189,7 @@ func (m *mockComponentRepo) GetByID(_ context.Context, id string) (*domain.Compo
 }
 
 func (m *mockComponentRepo) ListByEnvironment(_ context.Context, _ string, _ port.ComponentFilter) ([]*domain.Component, error) {
-	var result []*domain.Component
+	result := make([]*domain.Component, 0, len(m.components))
 	for _, c := range m.components {
 		result = append(result, c)
 	}
@@ -197,7 +197,7 @@ func (m *mockComponentRepo) ListByEnvironment(_ context.Context, _ string, _ por
 }
 
 func (m *mockComponentRepo) ListByTenant(_ context.Context, _ string) ([]*domain.Component, error) {
-	var result []*domain.Component
+	result := make([]*domain.Component, 0, len(m.components))
 	for _, c := range m.components {
 		result = append(result, c)
 	}

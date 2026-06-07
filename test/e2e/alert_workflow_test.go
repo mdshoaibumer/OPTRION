@@ -44,7 +44,7 @@ func TestE2E_AlertRuleWorkflow(t *testing.T) {
 	}
 
 	var ruleData map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&ruleData)
+	_ = json.NewDecoder(resp.Body).Decode(&ruleData) //nolint:errcheck // test helper, decode failures caught by subsequent assertions
 	resp.Body.Close()
 
 	ruleID, ok := ruleData["id"].(string)

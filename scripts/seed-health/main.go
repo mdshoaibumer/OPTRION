@@ -40,7 +40,7 @@ func main() {
 	pool, err := pgxpool.New(ctx, dbURL)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR: cannot connect to database: %v\n", err)
-		os.Exit(1)
+		os.Exit(1) //nolint:gocritic // acceptable in CLI script main()
 	}
 	defer pool.Close()
 
@@ -102,7 +102,7 @@ type component struct {
 }
 
 func getTenantID(baseURL, slug string) string {
-	resp, err := http.Get(baseURL + "/api/v1/tenants") //nolint:gosec
+	resp, err := http.Get(baseURL + "/api/v1/tenants") //nolint:gosec // seed script uses trusted local URL
 	if err != nil || resp.StatusCode != 200 {
 		return ""
 	}
@@ -125,30 +125,6 @@ func getTenantID(baseURL, slug string) string {
 		}
 	}
 	return ""
-}
-
-func getComponents(baseURL, tenantID string) []component {
-	resp, err := http.Get(baseURL + "/api/v1/components?tenant_id=" + tenantID) //nolint:gosec
-	if err != nil || resp.StatusCode != 200 {
-		return nil
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-
-	var result struct {
-		Data []struct {
-			ID   string `json:"id"`
-			Name string `json:"name"`
-			Kind string `json:"kind"`
-		} `json:"data"`
-	}
-	json.Unmarshal(body, &result) //nolint:errcheck
-
-	components := make([]component, 0, len(result.Data))
-	for _, d := range result.Data {
-		components = append(components, component{ID: d.ID, Name: d.Name, Kind: d.Kind})
-	}
-	return components
 }
 
 func seedBackendMetrics(ctx context.Context, pool *pgxpool.Pool, tenantID, componentID string) int {
@@ -244,7 +220,7 @@ func seedServerComponent(ctx context.Context, pool *pgxpool.Pool, tenantID strin
 	if err != nil {
 		// Component might already exist, try to find it
 		var existingID string
-		pool.QueryRow(ctx, `SELECT id FROM components WHERE tenant_id = $1 AND slug = 'optrion-server'`, tenantID).Scan(&existingID) //nolint:errcheck
+		_ = pool.QueryRow(ctx, `SELECT id FROM components WHERE tenant_id = $1 AND slug = 'optrion-server'`, tenantID).Scan(&existingID) //nolint:errcheck // fallback lookup, error is acceptable
 		if existingID != "" {
 			return existingID
 		}

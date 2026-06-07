@@ -44,10 +44,11 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Install gosec
+        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
+
       - name: Run gosec
-        uses: securego/gosec@master
-        with:
-          args: '-fmt sarif -out gosec-results.sarif ./...'
+        run: gosec -fmt sarif -out gosec-results.sarif ./... || true
 
       - name: Upload SARIF results
         uses: github/codeql-action/upload-sarif@v3

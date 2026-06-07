@@ -79,6 +79,15 @@ type ComponentFilter struct {
 type AuditRepository interface {
 	Create(ctx context.Context, event *domain.AuditEvent) error
 	ListByEntity(ctx context.Context, tenantID, entityType, entityID string, limit int) ([]*domain.AuditEvent, error)
+	ListByTenant(ctx context.Context, tenantID string, filter AuditFilter) ([]*domain.AuditEvent, int, error)
+}
+
+// AuditFilter defines filtering options for listing audit events.
+type AuditFilter struct {
+	Action     *string
+	EntityType *string
+	Limit      int
+	Offset     int
 }
 
 // UnitOfWork provides transaction support across repositories.

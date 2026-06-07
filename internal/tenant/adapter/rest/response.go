@@ -70,3 +70,15 @@ type ErrorResponse struct {
 	Error   string   `json:"error"`
 	Details []string `json:"details,omitempty"`
 }
+
+// AuditEventResponse is the API response for an audit event.
+type AuditEventResponse struct {
+	ID         string                 `json:"id"`
+	TenantID   string                 `json:"tenant_id"`
+	ActorID    string                 `json:"actor_id"`
+	Action     string                 `json:"action"`
+	EntityType string                 `json:"entity_type"`
+	EntityID   string                 `json:"entity_id"`
+	Payload    map[string]interface{} `json:"payload"`
+	OccurredAt time.Time              `json:"occurred_at"`
+}

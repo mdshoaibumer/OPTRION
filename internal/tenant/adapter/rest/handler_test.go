@@ -194,6 +194,9 @@ func (m *mockAuditRepo) Create(_ context.Context, _ *domain.AuditEvent) error { 
 func (m *mockAuditRepo) ListByEntity(_ context.Context, _, _, _ string, _ int) ([]*domain.AuditEvent, error) {
 	return nil, nil
 }
+func (m *mockAuditRepo) ListByTenant(_ context.Context, _ string, _ port.AuditFilter) ([]*domain.AuditEvent, int, error) {
+	return nil, 0, nil
+}
 
 type mockUnitOfWork struct{}
 

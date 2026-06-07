@@ -226,6 +226,10 @@ func (m *mockAuditRepo) ListByEntity(_ context.Context, _, _, _ string, _ int) (
 	return m.events, nil
 }
 
+func (m *mockAuditRepo) ListByTenant(_ context.Context, _ string, _ port.AuditFilter) ([]*domain.AuditEvent, int, error) {
+	return m.events, len(m.events), nil
+}
+
 type mockUnitOfWork struct{}
 
 func (m *mockUnitOfWork) Begin(ctx context.Context) (context.Context, error) { return ctx, nil }

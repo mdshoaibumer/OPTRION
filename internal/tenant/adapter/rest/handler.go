@@ -50,6 +50,7 @@ func (h *Handler) RegisterAuthenticatedRoutes(mux *http.ServeMux, authWrap func(
 	mux.Handle("GET /api/v1/environments", authWrap(http.HandlerFunc(h.ListEnvironments)))
 	mux.Handle("POST /api/v1/components", authWrap(http.HandlerFunc(h.RegisterComponent)))
 	mux.Handle("GET /api/v1/components", authWrap(http.HandlerFunc(h.ListComponents)))
+	mux.Handle("GET /api/v1/audit-logs", authWrap(http.HandlerFunc(h.ListAuditLogs)))
 }
 
 // CreateTenant handles POST /api/v1/tenants
@@ -334,6 +335,40 @@ func (h *Handler) ListComponents(w http.ResponseWriter, r *http.Request) {
 	server.WriteJSON(w, http.StatusOK, resp)
 }
 
+// ListAuditLogs handles GET /api/v1/audit-logs
+func (h *Handler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
+	tenantID := server.TenantIDFromContext(r.Context())
+	if tenantID == "" {
+		server.WriteJSON(w, http.StatusUnauthorized, ErrorResponse{Error: "authentication required"})
+		return
+	}
+
+	filter := port.AuditFilter{
+		Limit:  parseIntQuery(r, "limit", 50),
+		Offset: parseIntQuery(r, "offset", 0),
+	}
+
+	if action := r.URL.Query().Get("action"); action != "" {
+		filter.Action = &action
+	}
+	if entityType := r.URL.Query().Get("entity_type"); entityType != "" {
+		filter.EntityType = &entityType
+	}
+
+	events, total, err := h.service.ListAuditEvents(r.Context(), tenantID, filter)
+	if err != nil {
+		h.handleError(w, r, err)
+		return
+	}
+
+	resp := make([]AuditEventResponse, 0, len(events))
+	for _, e := range events {
+		resp = append(resp, toAuditEventResponse(e))
+	}
+
+	server.WriteJSON(w, http.StatusOK, server.NewPaginatedResponse(resp, total, filter.Limit, filter.Offset))
+}
+
 // --- Error Handling ---
 
 func (h *Handler) handleError(w http.ResponseWriter, r *http.Request, err error) {
@@ -418,6 +453,19 @@ func toComponentResponse(c *domain.Component) ComponentResponse {
 		Metadata:      c.Metadata,
 		CreatedAt:     c.CreatedAt,
 		UpdatedAt:     c.UpdatedAt,
+	}
+}
+
+func toAuditEventResponse(e *domain.AuditEvent) AuditEventResponse {
+	return AuditEventResponse{
+		ID:         e.ID,
+		TenantID:   e.TenantID,
+		ActorID:    e.ActorID,
+		Action:     e.Action,
+		EntityType: e.EntityType,
+		EntityID:   e.EntityID,
+		Payload:    e.Payload,
+		OccurredAt: e.OccurredAt,
 	}
 }
 

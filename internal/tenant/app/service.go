@@ -451,3 +451,8 @@ func (s *TenantService) CreateComponent(ctx context.Context, cmd CreateComponent
 		EndpointURL:   cmd.Endpoint,
 	})
 }
+
+// ListAuditEvents retrieves paginated audit events for a tenant.
+func (s *TenantService) ListAuditEvents(ctx context.Context, tenantID string, filter port.AuditFilter) ([]*domain.AuditEvent, int, error) {
+	return s.audit.ListByTenant(ctx, tenantID, filter)
+}

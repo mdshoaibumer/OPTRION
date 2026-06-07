@@ -1,0 +1,867 @@
+openapi: "3.1.0"
+info:
+  title: Optrion API
+  description: Engineering Intelligence Platform - Health monitoring, incident management, alerting, and AI-powered root cause analysis.
+  version: "1.0.0"
+  license:
+    name: MIT
+  contact:
+    name: Optrion
+    url: https://github.com/optrion/optrion
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+  - url: https://api.optrion.io
+    description: Production
+
+security:
+  - BearerAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: API key authentication using Bearer token (e.g., "opk_...")
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Human-readable error message
+        details:
+          type: array
+          items:
+            type: string
+          description: Detailed validation errors (optional)
+      required: [error]
+
+    PaginationMeta:
+      type: object
+      properties:
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+        has_more:
+          type: boolean
+
+    Tenant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        plan:
+          type: string
+          enum: [free, starter, professional, enterprise]
+        status:
+          type: string
+          enum: [active, suspended, deactivated]
+        settings:
+          type: object
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Environment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        product_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        tier:
+          type: string
+          enum: [development, staging, production]
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Component:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        product_id:
+          type: string
+          format: uuid
+        environment_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        kind:
+          type: string
+          enum: [service, database, cache, queue, gateway]
+        endpoint_url:
+          type: string
+        status:
+          type: string
+        metadata:
+          type: object
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Incident:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        component_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [open, acknowledged, investigating, resolved, closed]
+        severity:
+          type: string
+          enum: [info, warning, minor, major, critical]
+        correlation_id:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+        acknowledged_at:
+          type: string
+          format: date-time
+          nullable: true
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+        closed_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Alert:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        rule_id:
+          type: string
+          format: uuid
+        incident_id:
+          type: string
+          format: uuid
+        severity:
+          type: string
+        status:
+          type: string
+          enum: [pending, delivered, failed]
+        message:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    AuditEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        actor_id:
+          type: string
+        action:
+          type: string
+        entity_type:
+          type: string
+        entity_id:
+          type: string
+        payload:
+          type: object
+        occurred_at:
+          type: string
+          format: date-time
+
+    HealthSummary:
+      type: object
+      properties:
+        component_id:
+          type: string
+          format: uuid
+        component_name:
+          type: string
+        status:
+          type: string
+          enum: [healthy, degraded, critical, unknown]
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        last_check_at:
+          type: string
+          format: date-time
+
+paths:
+  /healthz:
+    get:
+      tags: [System]
+      summary: Liveness probe
+      security: []
+      responses:
+        "200":
+          description: Service is alive
+
+  /readyz:
+    get:
+      tags: [System]
+      summary: Readiness probe
+      security: []
+      responses:
+        "200":
+          description: Service is ready
+        "503":
+          description: Service is not ready
+
+  /metrics:
+    get:
+      tags: [System]
+      summary: Prometheus metrics
+      security: []
+      responses:
+        "200":
+          description: Prometheus text format metrics
+
+  /api/v1/info:
+    get:
+      tags: [System]
+      summary: Application info
+      security: []
+      responses:
+        "200":
+          description: Application version and environment
+
+  /api/v1/error-codes:
+    get:
+      tags: [System]
+      summary: List all API error codes
+      security: []
+      responses:
+        "200":
+          description: Error codes catalog
+
+  /api/v1/register:
+    post:
+      tags: [Registration]
+      summary: Register a new application (creates tenant + API key)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                slug:
+                  type: string
+              required: [name, slug]
+      responses:
+        "201":
+          description: Registration successful
+        "400":
+          description: Validation error
+        "409":
+          description: Slug already taken
+
+  /api/v1/events/stream:
+    get:
+      tags: [Events]
+      summary: SSE event stream for real-time updates
+      description: Server-Sent Events stream delivering real-time incident, health, and alert events.
+      responses:
+        "200":
+          description: SSE stream established
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "401":
+          description: Authentication required
+
+  /api/v1/tenants:
+    post:
+      tags: [Tenants]
+      summary: Create a tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                slug:
+                  type: string
+                plan:
+                  type: string
+                  enum: [free, starter, professional, enterprise]
+              required: [name, slug, plan]
+      responses:
+        "201":
+          description: Tenant created
+        "400":
+          description: Validation error
+        "409":
+          description: Slug taken
+
+    get:
+      tags: [Tenants]
+      summary: List tenants
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: List of tenants
+
+  /api/v1/tenants/{id}:
+    get:
+      tags: [Tenants]
+      summary: Get tenant by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Tenant details
+        "404":
+          description: Tenant not found
+
+  /api/v1/products:
+    post:
+      tags: [Catalog]
+      summary: Create a product
+      responses:
+        "201":
+          description: Product created
+    get:
+      tags: [Catalog]
+      summary: List products
+      parameters:
+        - name: tenant_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of products
+
+  /api/v1/environments:
+    post:
+      tags: [Catalog]
+      summary: Create an environment
+      responses:
+        "201":
+          description: Environment created
+    get:
+      tags: [Catalog]
+      summary: List environments
+      responses:
+        "200":
+          description: List of environments
+
+  /api/v1/components:
+    post:
+      tags: [Catalog]
+      summary: Register a component
+      responses:
+        "201":
+          description: Component registered
+    get:
+      tags: [Catalog]
+      summary: List components
+      parameters:
+        - name: environment_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of components
+
+  /api/v1/health/summary:
+    get:
+      tags: [Health]
+      summary: Get health summary for all components
+      responses:
+        "200":
+          description: Health summary
+
+  /api/v1/incidents:
+    get:
+      tags: [Incidents]
+      summary: List incidents
+      parameters:
+        - name: tenant_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, acknowledged, investigating, resolved, closed]
+        - name: severity
+          in: query
+          schema:
+            type: string
+            enum: [info, warning, minor, major, critical]
+        - name: component_id
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 200
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Paginated list of incidents
+
+  /api/v1/incidents/{id}:
+    get:
+      tags: [Incidents]
+      summary: Get incident by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Incident details
+        "404":
+          description: Incident not found
+
+  /api/v1/incidents/{id}/acknowledge:
+    post:
+      tags: [Incidents]
+      summary: Acknowledge an incident
+      responses:
+        "200":
+          description: Incident acknowledged
+        "422":
+          description: Invalid state transition
+
+  /api/v1/incidents/{id}/investigate:
+    post:
+      tags: [Incidents]
+      summary: Mark incident as investigating
+      responses:
+        "200":
+          description: Incident status updated
+
+  /api/v1/incidents/{id}/resolve:
+    post:
+      tags: [Incidents]
+      summary: Resolve an incident
+      responses:
+        "200":
+          description: Incident resolved
+
+  /api/v1/incidents/{id}/close:
+    post:
+      tags: [Incidents]
+      summary: Close an incident
+      responses:
+        "200":
+          description: Incident closed
+
+  /api/v1/incidents/{id}/timeline:
+    get:
+      tags: [Incidents]
+      summary: Get incident timeline
+      responses:
+        "200":
+          description: Incident timeline events
+
+  /api/v1/incidents/{id}/comments:
+    post:
+      tags: [Incidents]
+      summary: Add a comment to an incident
+      responses:
+        "201":
+          description: Comment added
+
+  /api/v1/incidents/{id}/analyze:
+    post:
+      tags: [AI]
+      summary: Trigger AI root cause analysis
+      responses:
+        "200":
+          description: Analysis started
+        "503":
+          description: AI provider unavailable
+
+  /api/v1/incidents/{id}/analysis:
+    get:
+      tags: [AI]
+      summary: Get root cause analysis for an incident
+      responses:
+        "200":
+          description: Analysis results
+        "404":
+          description: No analysis found
+
+  /api/v1/analysis:
+    get:
+      tags: [AI]
+      summary: List all analyses for tenant
+      responses:
+        "200":
+          description: List of analyses
+
+  /api/v1/incidents/{id}/recommend:
+    post:
+      tags: [Recommendations]
+      summary: Generate recommendations for an incident
+      responses:
+        "200":
+          description: Recommendations generated
+
+  /api/v1/incidents/{id}/recommendations:
+    get:
+      tags: [Recommendations]
+      summary: Get recommendations for an incident
+      responses:
+        "200":
+          description: Recommendation results
+
+  /api/v1/recommendations:
+    get:
+      tags: [Recommendations]
+      summary: List all recommendations for tenant
+      responses:
+        "200":
+          description: List of recommendations
+
+  /api/v1/alerts:
+    get:
+      tags: [Alerts]
+      summary: List alerts
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of alerts
+
+  /api/v1/alerts/{id}:
+    get:
+      tags: [Alerts]
+      summary: Get alert by ID
+      responses:
+        "200":
+          description: Alert details
+    patch:
+      tags: [Alerts]
+      summary: Update alert status
+      responses:
+        "200":
+          description: Alert updated
+
+  /api/v1/alert-rules:
+    get:
+      tags: [Alert Rules]
+      summary: List alert rules
+      responses:
+        "200":
+          description: List of alert rules
+    post:
+      tags: [Alert Rules]
+      summary: Create an alert rule
+      responses:
+        "201":
+          description: Alert rule created
+
+  /api/v1/alert-rules/{id}:
+    patch:
+      tags: [Alert Rules]
+      summary: Update an alert rule
+      responses:
+        "200":
+          description: Alert rule updated
+
+  /api/v1/escalation-policies:
+    get:
+      tags: [Escalation]
+      summary: List escalation policies
+      responses:
+        "200":
+          description: List of policies
+    post:
+      tags: [Escalation]
+      summary: Create an escalation policy
+      responses:
+        "201":
+          description: Policy created
+
+  /api/v1/escalation-policies/{id}:
+    patch:
+      tags: [Escalation]
+      summary: Update an escalation policy
+      responses:
+        "200":
+          description: Policy updated
+
+  /api/v1/api-keys:
+    post:
+      tags: [API Keys]
+      summary: Create a new API key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                expires_in:
+                  type: string
+                  description: Duration string (e.g., "720h" for 30 days)
+              required: [name]
+      responses:
+        "201":
+          description: API key created (key shown once)
+
+  /api/v1/api-keys/{id}/rotate:
+    post:
+      tags: [API Keys]
+      summary: Rotate an API key
+      description: Creates a new key and puts the old key into a grace period.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                grace_period:
+                  type: string
+                  description: "Duration string (e.g., '24h', '72h'). Default: 24h"
+      responses:
+        "200":
+          description: Key rotated (new key shown once)
+        "400":
+          description: Invalid request
+
+  /api/v1/api-keys/{id}:
+    delete:
+      tags: [API Keys]
+      summary: Revoke an API key
+      responses:
+        "200":
+          description: Key revoked
+
+  /api/v1/audit-logs:
+    get:
+      tags: [Audit]
+      summary: List audit logs for the tenant
+      parameters:
+        - name: action
+          in: query
+          schema:
+            type: string
+          description: Filter by action (e.g., "tenant.created")
+        - name: entity_type
+          in: query
+          schema:
+            type: string
+          description: Filter by entity type (e.g., "tenant", "component")
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 200
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Paginated list of audit events
+
+  /api/v1/register/bulk:
+    post:
+      tags: [Registration]
+      summary: Bulk register multiple components
+      responses:
+        "201":
+          description: Bulk registration successful
+
+  /api/v1/health-check-configs:
+    get:
+      tags: [Health Configuration]
+      summary: List health check configurations for a component
+      parameters:
+        - name: component_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of health check configurations
+    post:
+      tags: [Health Configuration]
+      summary: Create or update health check configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                component_id:
+                  type: string
+                  format: uuid
+                check_interval:
+                  type: string
+                  description: "Duration (e.g., '30s', '1m', '5m')"
+                timeout:
+                  type: string
+                  description: "Health check timeout (e.g., '10s')"
+                retries:
+                  type: integer
+                  minimum: 0
+                  maximum: 10
+                enabled:
+                  type: boolean
+              required: [component_id]
+      responses:
+        "200":
+          description: Configuration saved
+        "400":
+          description: Validation error
